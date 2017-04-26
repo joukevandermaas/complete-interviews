@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,15 +13,22 @@ import (
 type pageContent struct {
 	body string
 	url  string
+
+	err error
 }
 
 func main() {
-	url := "https://rc-interviewing.niposoftware-dev.com/Interviews/wwuaw/NKtRYwUmedoyizz48yiU"
+	// "https://rc-interviewing.niposoftware-dev.com/Interviews/wwuaw/NKtRYwUmedoyizz48yiU"
+	url := os.Args[1]
 
 	chInterviews := make(chan pageContent)
 
 	go getContent(url, chInterviews)
 	result := <-chInterviews
+
+	if result.err != nil {
+		log.Fatal(result.err)
+	}
 
 	questionNumber := 0
 	hasAnotherQuestion := true // depends on result.url
@@ -28,13 +36,16 @@ func main() {
 	for hasAnotherQuestion {
 		newRequest := getInterviewResponse(result.body, questionNumber)
 		go postContent(result.url, newRequest, chInterviews)
+
 		result = <-chInterviews
+
+		if result.err != nil {
+			log.Fatal(result.err)
+		}
 
 		questionNumber++
 		hasAnotherQuestion = false // depends on result.url
 	}
-
-	os.Exit(0)
 }
 
 func getInterviewResponse(html string, questionNumber int) url.Values {
@@ -46,8 +57,9 @@ func getInterviewResponse(html string, questionNumber int) url.Values {
 func postContent(url string, body url.Values, ch chan pageContent) {
 	response, err := http.Post(url, "application/x-www-form-urlencoded", strings.NewReader(body.Encode()))
 	if err != nil {
-		ch <- pageContent{}
+		ch <- pageContent{err: err}
 	} else {
+
 		defer response.Body.Close()
 
 		url := response.Request.URL.String()
@@ -57,6 +69,11 @@ func postContent(url string, body url.Values, ch chan pageContent) {
 		str := buf.String()
 
 		result := pageContent{body: str, url: url}
+
+		if response.StatusCode >= 400 {
+			result.err = fmt.Errorf("http request was unsuccessful: %s", response.Status)
+		}
+
 		ch <- result
 	}
 }
