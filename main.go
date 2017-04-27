@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -12,6 +11,10 @@ import (
 	"time"
 
 	"regexp"
+
+	"strconv"
+
+	"log"
 
 	"golang.org/x/net/html"
 )
@@ -24,36 +27,91 @@ type pageContent struct {
 }
 
 func main() {
-	// "https://rc-interviewing.niposoftware-dev.com/Interviews/wwuaw/NKtRYwUmedoyizz48yiU"
-	url := os.Args[1]
+	var url string
+	var count int
+
+	if len(os.Args) < 3 {
+		log.Fatal("First argument must be count, second url")
+	}
+
+	count, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if count < 1 {
+		log.Fatal("Count must be at least 1")
+	}
+
+	url = os.Args[2]
 
 	rand.Seed(time.Now().Unix())
 
-	/*
+	anyError := processInterviews(url, count)
 
-		THE PLAN:
-
-		- have a buffered channel
-		- seed it with e.g. 10 interviews
-		- every time an interview completes, add another to the channel
-		- go until every interview is done
-
-		on other end of channel:
-
-		- have a loop
-		- get from channel each time and complete interview
-
-	*/
-
-	chInterview := make(chan error)
-
-	go performInterview(url, chInterview)
-
-	result := <-chInterview
-
-	if result != nil {
-		log.Fatal(result)
+	if anyError {
+		os.Exit(1)
 	}
+}
+
+func processInterviews(url string, count int) bool {
+	maxConcurrency := 25
+
+	if maxConcurrency > count {
+		maxConcurrency = count
+	}
+
+	chInterviews := make(chan string)
+	chResults := make(chan error)
+
+	done := 0
+	errorOccurred := false
+
+	// start a goroutine for each interview
+	for i := 0; i < count; i++ {
+		go func(chIn chan string, chOut chan error) {
+			url := <-chIn
+			go performInterview(url, chOut)
+		}(chInterviews, chResults)
+	}
+
+	// start with maxConcurrency concurrent interviews
+	for i := 0; i < maxConcurrency; i++ {
+		chInterviews <- url
+	}
+
+	// each time an interview finishes, queue the next one
+	for i := maxConcurrency; i < count; i++ {
+		if i%maxConcurrency == 0 {
+			fmt.Printf("Completed %d of %d interviews...\n", done, count)
+		}
+
+		err := <-chResults
+		done++
+
+		if err != nil {
+			fmt.Println(err)
+			errorOccurred = true
+		}
+
+		chInterviews <- url
+	}
+
+	// handle the last maxConcurrency results
+	for i := 0; i < maxConcurrency; i++ {
+		err := <-chResults
+
+		if err != nil {
+			fmt.Println(err)
+			errorOccurred = true
+		}
+
+		done++
+	}
+
+	fmt.Printf("Completed %d of %d interviews...\n", done, count)
+
+	return errorOccurred
 }
 
 func performInterview(url string, ch chan error) {
@@ -130,14 +188,16 @@ func getInterviewResponse(document string) (url.Values, error) {
 
 	})
 
-	pickedAnswer := answerOptions[rand.Intn(len(answerOptions))]
+	if len(answerOptions) > 0 {
+		pickedAnswer := answerOptions[rand.Intn(len(answerOptions))]
 
-	result.Set(
-		fmt.Sprintf("answer-%s-m", questionNumber),
-		pickedAnswer)
-	result.Set(
-		fmt.Sprintf("answer-%s", questionNumber),
-		fmt.Sprintf("%s-%s", questionNumber, pickedAnswer))
+		result.Set(
+			fmt.Sprintf("answer-%s-m", questionNumber),
+			pickedAnswer)
+		result.Set(
+			fmt.Sprintf("answer-%s", questionNumber),
+			fmt.Sprintf("%s-%s", questionNumber, pickedAnswer))
+	}
 
 	return result, nil
 }
