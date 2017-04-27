@@ -55,62 +55,51 @@ func main() {
 }
 
 func processInterviews(url string, count int) bool {
-	maxConcurrency := 25
+	maxConcurrency := 10
 
 	if maxConcurrency > count {
 		maxConcurrency = count
 	}
 
-	chInterviews := make(chan string)
+	chInterviews := make(chan string, count)
 	chResults := make(chan error)
 
-	done := 0
-	errorOccurred := false
+	machine := func(in chan string, out chan error) {
+		resultChannel := make(chan error)
+		for {
+			nextInterview := <-in
+			go performInterview(nextInterview, resultChannel)
+			out <- <-resultChannel
+		}
+	}
 
-	// start a goroutine for each interview
 	for i := 0; i < count; i++ {
-		go func(chIn chan string, chOut chan error) {
-			url := <-chIn
-			go performInterview(url, chOut)
-		}(chInterviews, chResults)
-	}
-
-	// start with maxConcurrency concurrent interviews
-	for i := 0; i < maxConcurrency; i++ {
 		chInterviews <- url
 	}
 
-	// each time an interview finishes, queue the next one
-	for i := maxConcurrency; i < count; i++ {
+	for i := 0; i < maxConcurrency; i++ {
+		go machine(chInterviews, chResults)
+	}
+
+	errorOccurred := false
+	done := 0
+	for i := 0; i < count; i++ {
 		if i%maxConcurrency == 0 {
-			fmt.Printf("Completed %d of %d interviews...\n", done, count)
+			fmt.Printf("Done %d of %d interviews\n", done, count)
 		}
 
 		err := <-chResults
 		done++
 
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("ERROR: %v\n", err)
 			errorOccurred = true
 		}
-
-		chInterviews <- url
 	}
 
-	// handle the last maxConcurrency results
-	for i := 0; i < maxConcurrency; i++ {
-		err := <-chResults
-
-		if err != nil {
-			fmt.Println(err)
-			errorOccurred = true
-		}
-
-		done++
+	if maxConcurrency%count != 0 {
+		fmt.Printf("Done %d of %d interviews\n", done, count)
 	}
-
-	fmt.Printf("Completed %d of %d interviews...\n", done, count)
-
 	return errorOccurred
 }
 
