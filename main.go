@@ -83,8 +83,8 @@ func processInterviews(url string, count int) bool {
 
 	errorOccurred := false
 	done := 0
-	for i := 0; i < count; i++ {
-		if i%maxConcurrency == 0 {
+	for done < count {
+		if done%maxConcurrency == 0 {
 			fmt.Printf("Done %d of %d interviews\n", done, count)
 		}
 
@@ -97,7 +97,7 @@ func processInterviews(url string, count int) bool {
 		}
 	}
 
-	if maxConcurrency%count != 0 {
+	if maxConcurrency%count != 0 || count == maxConcurrency {
 		fmt.Printf("Done %d of %d interviews\n", done, count)
 	}
 	return errorOccurred
