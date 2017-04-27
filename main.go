@@ -4,10 +4,16 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"time"
+
+	"regexp"
+
+	"golang.org/x/net/html"
 )
 
 type pageContent struct {
@@ -20,6 +26,24 @@ type pageContent struct {
 func main() {
 	// "https://rc-interviewing.niposoftware-dev.com/Interviews/wwuaw/NKtRYwUmedoyizz48yiU"
 	url := os.Args[1]
+
+	rand.Seed(time.Now().Unix())
+
+	/*
+
+		THE PLAN:
+
+		- have a buffered channel
+		- seed it with e.g. 10 interviews
+		- every time an interview completes, add another to the channel
+		- go until every interview is done
+
+		on other end of channel:
+
+		- have a loop
+		- get from channel each time and complete interview
+
+	*/
 
 	chInterview := make(chan error)
 
@@ -42,11 +66,15 @@ func performInterview(url string, ch chan error) {
 		ch <- result.err
 	}
 
-	questionNumber := 0
-	hasAnotherQuestion := true // depends on result.url
+	hasAnotherQuestion := !strings.Contains(result.url, "/Home/Completed")
 
 	for hasAnotherQuestion {
-		newRequest := getInterviewResponse(result.body, questionNumber)
+		newRequest, err := getInterviewResponse(result.body)
+
+		if err != nil {
+			ch <- err
+		}
+
 		go postContent(result.url, newRequest, chInterviews)
 
 		result = <-chInterviews
@@ -55,17 +83,89 @@ func performInterview(url string, ch chan error) {
 			ch <- result.err
 		}
 
-		questionNumber++
-		hasAnotherQuestion = false // depends on result.url
+		hasAnotherQuestion = !strings.Contains(result.url, "/Home/Completed")
 	}
 
 	ch <- nil
 }
 
-func getInterviewResponse(html string, questionNumber int) url.Values {
-	fmt.Print(html)
-	// parse html, find question & possible answers and form result
-	return nil
+func getInterviewResponse(document string) (url.Values, error) {
+	doc, err := html.Parse(strings.NewReader(document))
+
+	if err != nil {
+		return nil, err
+	}
+
+	result := url.Values{}
+	result.Set("button-next", "Next")
+
+	questionRegex, err := regexp.Compile("categorylist-(q\\d+)-multi")
+
+	if err != nil {
+		return nil, err
+	}
+
+	var questionNumber string
+	var answerOptions []string
+
+	walkDocument(doc, "input", func(input *html.Node) {
+		attrs := attrsToMap(input.Attr)
+
+		if attrs["id"] == "screenId" {
+			result.Set("screenId", attrs["value"])
+		}
+		if attrs["id"] == "historyOrder" {
+			result.Set("historyOrder", attrs["value"])
+		}
+
+		matched := questionRegex.FindAllStringSubmatch(attrs["id"], 1)
+
+		if len(matched) > 0 {
+			questionNumber = matched[0][1]
+		}
+
+		if attrs["name"] == "answer-"+questionNumber {
+			answerOptions = append(answerOptions, strings.TrimPrefix(attrs["value"], questionNumber+"-"))
+		}
+
+	})
+
+	pickedAnswer := answerOptions[rand.Intn(len(answerOptions))]
+
+	result.Set(
+		fmt.Sprintf("answer-%s-m", questionNumber),
+		pickedAnswer)
+	result.Set(
+		fmt.Sprintf("answer-%s", questionNumber),
+		fmt.Sprintf("%s-%s", questionNumber, pickedAnswer))
+
+	return result, nil
+}
+
+type nodeHandler func(*html.Node)
+
+func walkDocument(node *html.Node, tag string, handler nodeHandler) {
+	if node.Data == tag {
+		handler(node)
+	}
+
+	if node.FirstChild != nil {
+		walkDocument(node.FirstChild, tag, handler)
+	}
+
+	if node.NextSibling != nil {
+		walkDocument(node.NextSibling, tag, handler)
+	}
+}
+
+func attrsToMap(attrs []html.Attribute) map[string]string {
+	result := make(map[string]string)
+
+	for _, attr := range attrs {
+		result[attr.Key] = attr.Val
+	}
+
+	return result
 }
 
 func postContent(url string, body url.Values, ch chan pageContent) {
