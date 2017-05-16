@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -42,7 +43,14 @@ func processInterviews() bool {
 		}
 	}
 
-	fmt.Printf("Starting interviews (%d concurrently)...\n", *maxConcurrency)
+	var waitTimeString string
+	if *waitBetweenPosts > 0 {
+		waitTimeString = fmt.Sprintf(", waiting %ds between questions", *waitBetweenPosts)
+	} else {
+		waitTimeString = ""
+	}
+
+	fmt.Printf("Starting interviews (%d concurrently%s)...\n", *maxConcurrency, waitTimeString)
 	for i := 0; i < *count; i++ {
 		chInterviews <- interviewURL
 	}
@@ -185,6 +193,11 @@ func attrsToMap(attrs []html.Attribute) map[string]string {
 }
 
 func postContent(url *string, body url.Values, ch chan pageContent) {
+
+	if *waitBetweenPosts > 0 {
+		time.Sleep(time.Duration(*waitBetweenPosts) * time.Second)
+	}
+
 	response, err := http.Post(*url, "application/x-www-form-urlencoded", strings.NewReader(body.Encode()))
 
 	ch <- handleHTTPResult(response, err)
