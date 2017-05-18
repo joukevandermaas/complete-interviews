@@ -22,6 +22,11 @@ then using this knowledge, scan through it again to get the correct info
 
 **/
 
+const (
+	qTypeOpenMulti = "OpenMulti"
+	qTypeCategory  = "Category"
+)
+
 func getInterviewResponse(document *string, previousHistoryOrder string) (url.Values, string, error) {
 	writeVerbose(fmt.Sprintf("=============================\n\n%s\n\n=============================\n", *document))
 	doc, err := html.Parse(strings.NewReader(*document))
@@ -43,8 +48,14 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 		return nil, "", fmt.Errorf("validation error in interview (answer rejected)")
 	}
 
-	// assume category question for now
-	err = setCategoryQuestionValues(doc, result)
+	questionType := getQuestionType(doc)
+
+	switch questionType {
+	case qTypeCategory:
+		err = setCategoryQuestionValues(doc, result)
+	case qTypeOpenMulti:
+		err = setOpenMultiQuestionValues(doc, result)
+	}
 
 	if err != nil {
 		return nil, "", err
@@ -53,6 +64,22 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 	writeVerbose(fmt.Sprintf("posting response: %v\n", result))
 
 	return result, historyOrder, nil
+}
+
+func getQuestionType(document *html.Node) string {
+	foundTextArea := false
+
+	walkDocument(document, func(node *html.Node) {
+		if node.Data == "textarea" {
+			foundTextArea = true
+		}
+	})
+
+	if foundTextArea {
+		return qTypeOpenMulti
+	}
+
+	return qTypeCategory
 }
 
 func setCommonValues(document *html.Node, result url.Values) error {
@@ -67,6 +94,16 @@ func setCommonValues(document *html.Node, result url.Values) error {
 		if attrs["id"] == "historyOrder" {
 			result.Set("historyOrder", attrs["value"])
 		}
+	})
+
+	return nil
+}
+
+func setOpenMultiQuestionValues(document *html.Node, result url.Values) error {
+	walkDocumentByTag(document, "textarea", func(node *html.Node) {
+		attrs := attrsToMap(node.Attr)
+
+		result.Set(attrs["name"], "hello suckers")
 	})
 
 	return nil
