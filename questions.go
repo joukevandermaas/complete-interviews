@@ -10,7 +10,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-type nodeHandler func(*html.Node) error
+type nodeHandler func(*html.Node)
 
 /**
 
@@ -31,36 +31,64 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 	}
 
 	result := url.Values{}
+	err = setCommonValues(doc, result)
+
+	if err != nil {
+		return nil, "", err
+	}
+
+	historyOrder := result["historyOrder"][0]
+
+	if historyOrder == previousHistoryOrder {
+		return nil, "", fmt.Errorf("validation error in interview (answer rejected)")
+	}
+
+	// assume category question for now
+	err = setCategoryQuestionValues(doc, result)
+
+	if err != nil {
+		return nil, "", err
+	}
+
+	writeVerbose(fmt.Sprintf("posting response: %v\n", result))
+
+	return result, historyOrder, nil
+}
+
+func setCommonValues(document *html.Node, result url.Values) error {
 	result.Set("button-next", "Next")
 
-	questionRegex, err := regexp.Compile("categorylist-(q\\d+)-multi")
-	if err != nil {
-		return nil, "", err
-	}
-
-	answerRegex, err := regexp.Compile("answer-(q\\d+)(-\\d+)?")
-	if err != nil {
-		return nil, "", err
-	}
-
-	var questionNumber string
-	var answerOptions []string
-	var answerFullValue []string
-	var historyOrder string
-
-	err = walkDocument(doc, "input", func(input *html.Node) error {
+	walkDocumentByTag(document, "input", func(input *html.Node) {
 		attrs := attrsToMap(input.Attr)
 
 		if attrs["id"] == "screenId" {
 			result.Set("screenId", attrs["value"])
 		}
 		if attrs["id"] == "historyOrder" {
-			historyOrder = attrs["value"]
-			if previousHistoryOrder == historyOrder {
-				return fmt.Errorf("validation error in interview (answer rejected)")
-			}
-			result.Set("historyOrder", historyOrder)
+			result.Set("historyOrder", attrs["value"])
 		}
+	})
+
+	return nil
+}
+
+func setCategoryQuestionValues(document *html.Node, result url.Values) error {
+	questionRegex, err := regexp.Compile("categorylist-(q\\d+)-multi")
+	if err != nil {
+		return err
+	}
+
+	answerRegex, err := regexp.Compile("answer-(q\\d+)(-\\d+)?")
+	if err != nil {
+		return err
+	}
+
+	var questionNumber string
+	var answerOptions []string
+	var answerFullValue []string
+
+	walkDocumentByTag(document, "input", func(input *html.Node) {
+		attrs := attrsToMap(input.Attr)
 
 		matched := questionRegex.FindAllStringSubmatch(attrs["id"], 1)
 
@@ -81,13 +109,7 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 				answerFullValue = append(answerFullValue, matched[0][1])
 			}
 		}
-
-		return nil
 	})
-
-	if err != nil {
-		return nil, "", err
-	}
 
 	if len(answerOptions) > 0 {
 		pickedAnswerIndex := rand.Intn(len(answerOptions))
@@ -102,34 +124,27 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 			fmt.Sprintf("%s-%s", questionNumber, pickedAnswer))
 	}
 
-	writeVerbose(fmt.Sprintf("posting response: %v\n", result))
-
-	return result, historyOrder, nil
+	return nil
 }
 
-func walkDocument(node *html.Node, tag string, handler nodeHandler) error {
-	if node.Data == tag {
-		err := handler(node)
-		if err != nil {
-			return err
+func walkDocumentByTag(node *html.Node, tag string, handler nodeHandler) {
+	walkDocument(node, func(theNode *html.Node) {
+		if theNode.Data == tag {
+			handler(theNode)
 		}
-	}
+	})
+}
+
+func walkDocument(node *html.Node, handler nodeHandler) {
+	handler(node)
 
 	if node.FirstChild != nil {
-		err := walkDocument(node.FirstChild, tag, handler)
-		if err != nil {
-			return err
-		}
+		walkDocument(node.FirstChild, handler)
 	}
 
 	if node.NextSibling != nil {
-		err := walkDocument(node.NextSibling, tag, handler)
-		if err != nil {
-			return err
-		}
+		walkDocument(node.NextSibling, handler)
 	}
-
-	return nil
 }
 
 func attrsToMap(attrs []html.Attribute) map[string]string {
