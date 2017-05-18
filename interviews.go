@@ -3,10 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/url"
-	"regexp"
+	"os"
 	"strings"
 	"time"
 
@@ -22,7 +21,10 @@ type pageContent struct {
 
 type nodeHandler func(*html.Node)
 
-func processInterviews() bool {
+var requestTimeout = time.Duration(30 * time.Second)
+var endOfInterviewPath = "/Home/Completed"
+
+func processInterviews() int {
 	if *maxConcurrency < 1 {
 		*maxConcurrency = 1
 	}
@@ -36,11 +38,16 @@ func processInterviews() bool {
 
 	machine := func(in chan *string, out chan error) {
 		resultChannel := make(chan error)
-		for {
+		for len(in) > 0 {
 			nextInterview := <-in
+
+			writeVerbose(fmt.Sprintf("Picked up interview %s\n", *nextInterview))
+
 			go performInterview(nextInterview, resultChannel)
 			out <- <-resultChannel
 		}
+
+		writeVerbose("Stopping thread to process interviews...\n")
 	}
 
 	var waitTimeString string
@@ -56,28 +63,43 @@ func processInterviews() bool {
 	}
 
 	for i := 0; i < *maxConcurrency; i++ {
+		writeVerbose("Starting thread to process interviews...\n")
 		go machine(chInterviews, chResults)
+	}
+
+	var printNo int
+
+	if *count > 1000 {
+		printNo = 100
+	} else if *count > 100 {
+		printNo = 50
+	} else if *count > 10 {
+		printNo = 10
+	} else {
+		printNo = 1
 	}
 
 	errors := 0
 	done := 0
 	for done < *count {
-		if done%*maxConcurrency == 0 {
-			fmt.Printf("completed %d of %d interviews\n", done, *count)
+		if done%printNo == 0 {
+			fmt.Printf("completed: %4d of %d interviews\n", done, *count)
 		}
 
 		err := <-chResults
 		done++
 
+		writeVerbose(fmt.Sprintf("done: %4d; errors: %4d; queue: %4d\n", done, errors, len(chInterviews)))
+
 		if err != nil {
-			fmt.Printf("ERROR: %v\n", err)
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 			errors++
 		}
 	}
 
 	fmt.Printf("\nFinished: successfully completed %d of %d interviews\n", done-errors, *count)
 
-	return errors > 0
+	return errors
 }
 
 func performInterview(url *string, ch chan error) {
@@ -88,9 +110,11 @@ func performInterview(url *string, ch chan error) {
 
 	if result.err != nil {
 		ch <- result.err
+
+		return
 	}
 
-	hasAnotherQuestion := !strings.Contains(*result.url, "/Home/Completed")
+	hasAnotherQuestion := !strings.Contains(*result.url, endOfInterviewPath)
 
 	for hasAnotherQuestion {
 		newRequest, err := getInterviewResponse(result.body)
@@ -105,106 +129,35 @@ func performInterview(url *string, ch chan error) {
 
 		if result.err != nil {
 			ch <- result.err
+			return
 		}
 
-		hasAnotherQuestion = !strings.Contains(*result.url, "/Home/Completed")
+		hasAnotherQuestion = !strings.Contains(*result.url, endOfInterviewPath)
 	}
 
 	ch <- nil
 }
 
-func getInterviewResponse(document *string) (url.Values, error) {
-	doc, err := html.Parse(strings.NewReader(*document))
-
-	if err != nil {
-		return nil, err
-	}
-
-	result := url.Values{}
-	result.Set("button-next", "Next")
-
-	questionRegex, err := regexp.Compile("categorylist-(q\\d+)-multi")
-
-	if err != nil {
-		return nil, err
-	}
-
-	var questionNumber string
-	var answerOptions []string
-
-	walkDocument(doc, "input", func(input *html.Node) {
-		attrs := attrsToMap(input.Attr)
-
-		if attrs["id"] == "screenId" {
-			result.Set("screenId", attrs["value"])
-		}
-		if attrs["id"] == "historyOrder" {
-			result.Set("historyOrder", attrs["value"])
-		}
-
-		matched := questionRegex.FindAllStringSubmatch(attrs["id"], 1)
-
-		if len(matched) > 0 {
-			questionNumber = matched[0][1]
-		}
-
-		if attrs["name"] == "answer-"+questionNumber {
-			answerOptions = append(answerOptions, strings.TrimPrefix(attrs["value"], questionNumber+"-"))
-		}
-
-	})
-
-	if len(answerOptions) > 0 {
-		pickedAnswer := answerOptions[rand.Intn(len(answerOptions))]
-
-		result.Set(
-			fmt.Sprintf("answer-%s-m", questionNumber),
-			pickedAnswer)
-		result.Set(
-			fmt.Sprintf("answer-%s", questionNumber),
-			fmt.Sprintf("%s-%s", questionNumber, pickedAnswer))
-	}
-
-	return result, nil
-}
-
-func walkDocument(node *html.Node, tag string, handler nodeHandler) {
-	if node.Data == tag {
-		handler(node)
-	}
-
-	if node.FirstChild != nil {
-		walkDocument(node.FirstChild, tag, handler)
-	}
-
-	if node.NextSibling != nil {
-		walkDocument(node.NextSibling, tag, handler)
-	}
-}
-
-func attrsToMap(attrs []html.Attribute) map[string]string {
-	result := make(map[string]string)
-
-	for _, attr := range attrs {
-		result[attr.Key] = attr.Val
-	}
-
-	return result
-}
-
 func postContent(url *string, body url.Values, ch chan pageContent) {
-
 	if *waitBetweenPosts > 0 {
 		time.Sleep(time.Duration(*waitBetweenPosts) * time.Second)
 	}
 
-	response, err := http.Post(*url, "application/x-www-form-urlencoded", strings.NewReader(body.Encode()))
+	client := http.Client{
+		Timeout: requestTimeout,
+	}
+
+	response, err := client.Post(*url, "application/x-www-form-urlencoded", strings.NewReader(body.Encode()))
 
 	ch <- handleHTTPResult(response, err)
 }
 
 func getContent(url *string, ch chan pageContent) {
-	response, err := http.Get(*url)
+	client := http.Client{
+		Timeout: requestTimeout,
+	}
+
+	response, err := client.Get(*url)
 
 	ch <- handleHTTPResult(response, err)
 }
