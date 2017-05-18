@@ -12,6 +12,16 @@ import (
 
 type nodeHandler func(*html.Node) error
 
+/**
+
+refactor idea:
+
+scan through the document one time, figure out question type(s)
+
+then using this knowledge, scan through it again to get the correct info
+
+**/
+
 func getInterviewResponse(document *string, previousHistoryOrder string) (url.Values, string, error) {
 	writeVerbose(fmt.Sprintf("=============================\n\n%s\n\n=============================\n", *document))
 	doc, err := html.Parse(strings.NewReader(*document))
