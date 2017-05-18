@@ -8,8 +8,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"golang.org/x/net/html"
 )
 
 type pageContent struct {
@@ -18,8 +16,6 @@ type pageContent struct {
 
 	err error
 }
-
-type nodeHandler func(*html.Node)
 
 var requestTimeout = time.Duration(30 * time.Second)
 var endOfInterviewPath = "/Home/Completed"
@@ -83,7 +79,7 @@ func processInterviews() int {
 	done := 0
 	for done < *count {
 		if done%printNo == 0 {
-			fmt.Printf("completed: %4d of %d interviews\n", done, *count)
+			fmt.Printf("completed: %4d of %d\n", done, *count)
 		}
 
 		err := <-chResults
@@ -114,10 +110,11 @@ func performInterview(url *string, ch chan error) {
 		return
 	}
 
+	prevHistoryOrder := ""
 	hasAnotherQuestion := !strings.Contains(*result.url, endOfInterviewPath)
 
 	for hasAnotherQuestion {
-		newRequest, err := getInterviewResponse(result.body)
+		newRequest, historyOrder, err := getInterviewResponse(result.body, prevHistoryOrder)
 
 		if err != nil {
 			ch <- err
@@ -133,6 +130,7 @@ func performInterview(url *string, ch chan error) {
 		}
 
 		hasAnotherQuestion = !strings.Contains(*result.url, endOfInterviewPath)
+		prevHistoryOrder = historyOrder
 	}
 
 	ch <- nil
