@@ -33,8 +33,8 @@ func main() {
 	}
 }
 
-func writeVerbose(message string) {
+func writeVerbose(label string, message string) {
 	if *verboseOutput {
-		fmt.Print(message)
+		fmt.Printf("VERBOSE: %s: %s", label, message)
 	}
 }

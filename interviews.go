@@ -37,13 +37,13 @@ func processInterviews() int {
 		for len(in) > 0 {
 			nextInterview := <-in
 
-			writeVerbose(fmt.Sprintf("Picked up interview %s\n", *nextInterview))
+			writeVerbose("picked up interview", fmt.Sprintf("%s\n", *nextInterview))
 
 			go performInterview(nextInterview, resultChannel)
 			out <- <-resultChannel
 		}
 
-		writeVerbose("Stopping thread to process interviews...\n")
+		writeVerbose("thread", "Stopping thread to process interviews...\n")
 	}
 
 	var waitTimeString string
@@ -59,7 +59,7 @@ func processInterviews() int {
 	}
 
 	for i := 0; i < *maxConcurrency; i++ {
-		writeVerbose("Starting thread to process interviews...\n")
+		writeVerbose("thread", "Starting thread to process interviews...\n")
 		go machine(chInterviews, chResults)
 	}
 
@@ -85,7 +85,7 @@ func processInterviews() int {
 		err := <-chResults
 		done++
 
-		writeVerbose(fmt.Sprintf("done: %4d; errors: %4d; queue: %4d\n", done, errors, len(chInterviews)))
+		writeVerbose("info", fmt.Sprintf("done: %4d; errors: %4d; queue: %4d\n", done, errors, len(chInterviews)))
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -131,6 +131,8 @@ func performInterview(url *string, ch chan error) {
 
 		hasAnotherQuestion = !strings.Contains(*result.url, endOfInterviewPath)
 		prevHistoryOrder = historyOrder
+
+		writeVerbose("================================", "\n")
 	}
 
 	ch <- nil

@@ -28,7 +28,6 @@ const (
 )
 
 func getInterviewResponse(document *string, previousHistoryOrder string) (url.Values, string, error) {
-	writeVerbose(fmt.Sprintf("=============================\n\n%s\n\n=============================\n", *document))
 	doc, err := html.Parse(strings.NewReader(*document))
 
 	if err != nil {
@@ -42,10 +41,16 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 		return nil, "", err
 	}
 
-	historyOrder := result["historyOrder"][0]
+	writeVerbose("common-values", fmt.Sprintf("%v\n", result))
 
-	if historyOrder == previousHistoryOrder {
-		return nil, "", fmt.Errorf("validation error in interview (answer rejected)")
+	var historyOrder string
+
+	if val, ok := result["historyOrder"]; ok {
+		historyOrder = val[0]
+
+		if historyOrder == previousHistoryOrder {
+			return nil, "", fmt.Errorf("validation error in interview (answer rejected)")
+		}
 	}
 
 	questionType := getQuestionType(doc)
@@ -61,7 +66,7 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 		return nil, "", err
 	}
 
-	writeVerbose(fmt.Sprintf("posting response: %v\n", result))
+	writeVerbose("posting response", fmt.Sprintf("%v\n", result))
 
 	return result, historyOrder, nil
 }
@@ -128,22 +133,29 @@ func setCategoryQuestionValues(document *html.Node, result url.Values) error {
 		attrs := attrsToMap(input.Attr)
 
 		matched := questionRegex.FindAllStringSubmatch(attrs["id"], 1)
-
-		writeVerbose(fmt.Sprintf("%v\n", matched))
+		writeVerbose("attrs", fmt.Sprintf("%v\n", attrs))
 
 		if len(matched) > 0 {
+			writeVerbose("matched questions", fmt.Sprintf("%v\n", matched[0]))
 			questionNumber = matched[0][1]
+
+			return // read: move on to next input
 		}
 
 		matched = answerRegex.FindAllStringSubmatch(attrs["name"], 1)
 
 		if len(matched) > 0 {
+			writeVerbose("matched answers", fmt.Sprintf("%v\n", matched[0]))
 			answerOptions = append(answerOptions, strings.TrimPrefix(attrs["value"], questionNumber+"-"))
 
 			if len(matched[0]) > 2 {
-				answerFullValue = append(answerFullValue, fmt.Sprintf("%s%s", matched[0][1], matched[0][2]))
+				fullValue := fmt.Sprintf("%s%s", matched[0][1], matched[0][2])
+				writeVerbose("full value", fmt.Sprintf("%s (>2)\n", fullValue))
+				answerFullValue = append(answerFullValue, fullValue)
 			} else {
-				answerFullValue = append(answerFullValue, matched[0][1])
+				fullValue := matched[0][1]
+				writeVerbose("full value", fmt.Sprintf("%s (>1)\n", fullValue))
+				answerFullValue = append(answerFullValue, fullValue)
 			}
 		}
 	})
@@ -152,6 +164,10 @@ func setCategoryQuestionValues(document *html.Node, result url.Values) error {
 		pickedAnswerIndex := rand.Intn(len(answerOptions))
 		pickedAnswer := answerOptions[pickedAnswerIndex]
 		pickedAnswerDescription := answerFullValue[pickedAnswerIndex]
+
+		writeVerbose("picked answer", fmt.Sprintf("%d\n", pickedAnswerIndex))
+		writeVerbose("options", fmt.Sprintf("%v\n", answerOptions))
+		writeVerbose("descriptions", fmt.Sprintf("%v\n", answerFullValue))
 
 		result.Set(
 			fmt.Sprintf("answer-%s-m", questionNumber),
