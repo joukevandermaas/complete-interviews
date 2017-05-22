@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -21,6 +23,8 @@ var requestTimeout = time.Duration(30 * time.Second)
 var endOfInterviewPath = "/Home/Completed"
 
 func processInterviews() int {
+	requestURL := (*interviewURL).String()
+
 	if *maxConcurrency < 1 {
 		*maxConcurrency = 1
 	}
@@ -37,7 +41,7 @@ func processInterviews() int {
 		for len(in) > 0 {
 			nextInterview := <-in
 
-			writeVerbose("picked up interview", fmt.Sprintf("%s\n", *nextInterview))
+			writeVerbose("picked up interview", "%s\n", *nextInterview)
 
 			go performInterview(nextInterview, resultChannel)
 			out <- <-resultChannel
@@ -55,7 +59,7 @@ func processInterviews() int {
 
 	fmt.Printf("Starting interviews (%d concurrently%s)...\n", *maxConcurrency, waitTimeString)
 	for i := 0; i < *count; i++ {
-		chInterviews <- interviewURL
+		chInterviews <- &requestURL
 	}
 
 	for i := 0; i < *maxConcurrency; i++ {
@@ -85,7 +89,7 @@ func processInterviews() int {
 		err := <-chResults
 		done++
 
-		writeVerbose("info", fmt.Sprintf("done: %4d; errors: %4d; queue: %4d\n", done, errors, len(chInterviews)))
+		writeVerbose("info", "done: %4d; errors: %4d; queue: %4d\n", done, errors, len(chInterviews))
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -162,6 +166,8 @@ func getContent(url *string, ch chan pageContent) {
 	ch <- handleHTTPResult(response, err)
 }
 
+var httpTime = 1
+
 func handleHTTPResult(response *http.Response, err error) pageContent {
 	if err != nil {
 		return pageContent{err: err}
@@ -173,6 +179,16 @@ func handleHTTPResult(response *http.Response, err error) pageContent {
 
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(response.Body)
+
+	if *htmlOutputDir != "" {
+		bytes := buf.Bytes()
+		err = ioutil.WriteFile(filepath.Join(*htmlOutputDir, fmt.Sprintf("page%d.html", httpTime)), bytes, os.ModeAppend)
+
+		if err != nil {
+			return pageContent{err: err}
+		}
+	}
+
 	str := buf.String()
 
 	result := pageContent{body: &str, url: &url}
@@ -181,5 +197,6 @@ func handleHTTPResult(response *http.Response, err error) pageContent {
 		result.err = fmt.Errorf("http request was unsuccessful: %s (url: %s)", response.Status, url)
 	}
 
+	httpTime++
 	return result
 }
