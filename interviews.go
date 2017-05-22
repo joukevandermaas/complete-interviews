@@ -34,20 +34,6 @@ func processInterviews(done *int, errors *int) {
 	chInterviews := make(chan *string, *count)
 	chResults := make(chan error)
 
-	machine := func(in chan *string, out chan error) {
-		resultChannel := make(chan error)
-		for len(in) > 0 {
-			nextInterview := <-in
-
-			writeVerbose("picked up interview", "%s\n", *nextInterview)
-
-			go performInterview(nextInterview, resultChannel)
-			out <- <-resultChannel
-		}
-
-		writeVerbose("thread", "Stopping thread to process interviews...\n")
-	}
-
 	var waitTimeString string
 	if *waitBetweenPosts > 0 {
 		waitTimeString = fmt.Sprintf(", waiting %ds between questions", *waitBetweenPosts)
@@ -62,26 +48,30 @@ func processInterviews(done *int, errors *int) {
 
 	for i := 0; i < *maxConcurrency; i++ {
 		writeVerbose("thread", "Starting thread to process interviews...\n")
-		go machine(chInterviews, chResults)
+
+		go func(in chan *string, out chan error) {
+			resultChannel := make(chan error)
+			for len(in) > 0 {
+				nextInterview := <-in
+
+				writeVerbose("picked up interview", "%s\n", *nextInterview)
+
+				go performInterview(nextInterview, resultChannel)
+				out <- <-resultChannel
+			}
+
+			writeVerbose("thread", "Stopping thread to process interviews...\n")
+		}(chInterviews, chResults)
 	}
 
-	var printNo int
-
-	if *count > 1000 {
-		printNo = 100
-	} else if *count > 100 {
-		printNo = 50
-	} else if *count > 10 {
-		printNo = 10
-	} else {
-		printNo = 1
-	}
+	go func() {
+		for *done < *count {
+			fmt.Printf("completed: %4d of %d (%2d%%), %4d errors\n", *done, *count, (*done*100) / *count, *errors)
+			time.Sleep(4 * time.Second)
+		}
+	}()
 
 	for *done < *count {
-		if (*done)%printNo == 0 {
-			fmt.Printf("completed: %4d of %d\n", *done, *count)
-		}
-
 		err := <-chResults
 		(*done)++
 
