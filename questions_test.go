@@ -2,17 +2,31 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/url"
-	"strings"
 	"testing"
-
-	"golang.org/x/net/html"
 
 	"strconv"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestSetOpenMultiQuestionValues(t *testing.T) {
+	assert := assert.New(t)
+
+	doc, err := getHTMLDocument("test-files/multiline.html")
+	assert.NoError(err)
+
+	values := make(url.Values)
+
+	err = setOpenMultiQuestionValues(doc, values)
+	assert.NoError(err)
+
+	result := flattenURLValues(values)
+
+	t.Logf("%v\n", result)
+
+	assert.NotEmpty(result["answer-q1"])
+}
 
 func TestSetCommonValues(t *testing.T) {
 	assert := assert.New(t)
@@ -31,24 +45,6 @@ func TestSetCommonValues(t *testing.T) {
 	assert.Equal("0", result["historyOrder"])
 	assert.Equal("032794ea-dfbb-4c33-95c2-2fbe5befd885", result["screenId"])
 	assert.Equal("Next", result["button-next"])
-}
-
-func TestSetOpenMultiQuestionValues(t *testing.T) {
-	assert := assert.New(t)
-
-	doc, err := getHTMLDocument("test-files/multiline.html")
-	assert.NoError(err)
-
-	values := make(url.Values)
-
-	err = setOpenMultiQuestionValues(doc, values)
-	assert.NoError(err)
-
-	result := flattenURLValues(values)
-
-	t.Logf("%v\n", result)
-
-	assert.NotEmpty(result["answer-q1"])
 }
 
 func TestSetOpenSingleQuestionValues(t *testing.T) {
@@ -122,6 +118,7 @@ func TestGetQuestionType(t *testing.T) {
 		"test-files/multi-category.html":  qTypeCategory,
 		"test-files/single-category.html": qTypeCategory,
 		"test-files/multiline.html":       qTypeOpenMulti,
+		"test-files/number.html":          qTypeNumber,
 		"test-files/singleline.html":      qTypeOpenSingle,
 		"test-files/welcome-page.html":    qTypePage,
 		"test-files/page-question.html":   qTypePage,
@@ -146,6 +143,24 @@ func TestGetInterviewResponseReturnsErrOnSameHistoryOrder(t *testing.T) {
 	_, _, err = getInterviewResponse(&doc, "0")
 
 	assert.Error(err)
+}
+
+func TestGetInterviewResponseReturnsGoodResponseForMultiLineText(t *testing.T) {
+	assert := assert.New(t)
+
+	doc, err := getHTMLString("test-files/multiline.html")
+	assert.NoError(err)
+
+	response, historyOrder, err := getInterviewResponse(&doc, "")
+	assert.NoError(err)
+
+	assert.Equal("0", historyOrder)
+
+	result := flattenURLValues(response)
+	t.Logf("%v\n", result)
+
+	assert.NotEmpty(result["answer-q1"])
+	assert.True(len(result["answer-q1"]) > 10, "Length greater than 10")
 }
 
 func TestGetInterviewResponseReturnsGoodResponseForSingleCategory(t *testing.T) {
@@ -211,10 +226,10 @@ func TestGetInterviewResponseReturnsGoodResponseForSingleLineText(t *testing.T) 
 	assert.True(len(result["answer-q1"]) < 13, "Length smaller than 13")
 }
 
-func TestGetInterviewResponseReturnsGoodResponseForMultiLineText(t *testing.T) {
+func TestGetInterviewResponseReturnsGoodResponseForNumber(t *testing.T) {
 	assert := assert.New(t)
 
-	doc, err := getHTMLString("test-files/multiline.html")
+	doc, err := getHTMLString("test-files/number.html")
 	assert.NoError(err)
 
 	response, historyOrder, err := getInterviewResponse(&doc, "")
@@ -226,7 +241,12 @@ func TestGetInterviewResponseReturnsGoodResponseForMultiLineText(t *testing.T) {
 	t.Logf("%v\n", result)
 
 	assert.NotEmpty(result["answer-q1"])
-	assert.True(len(result["answer-q1"]) > 10, "Length greater than 10")
+
+	value, err := strconv.ParseInt(result["answer-q1"], 0, 32)
+	assert.NoError(err)
+
+	assert.True(value >= 5, "Value greater than 5")
+	assert.True(value <= 15, "Value smaller than 15")
 }
 
 func TestGetInterviewResponseReturnsGoodResponseForWelcomePage(t *testing.T) {
@@ -257,41 +277,4 @@ func TestGetInterviewResponseReturnsGoodResponseForPageQuestion(t *testing.T) {
 
 	assert.Equal("0", historyOrder)
 	assert.Empty(result["answer-q1"])
-}
-
-/********************************************************************************************\
-|                                     test helper functions                                  |
-\********************************************************************************************/
-
-func getHTMLString(filename string) (string, error) {
-	file, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return "", err
-	}
-
-	return string(file), nil
-}
-
-func getHTMLDocument(filename string) (*html.Node, error) {
-	content, err := getHTMLString(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	doc, err := html.Parse(strings.NewReader(content))
-	if err != nil {
-		return nil, err
-	}
-
-	return doc, nil
-}
-
-func flattenURLValues(values url.Values) map[string]string {
-	result := make(map[string]string)
-
-	for key, val := range values {
-		result[key] = val[0]
-	}
-
-	return result
 }

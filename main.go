@@ -1,7 +1,9 @@
 package main
 
 import (
+	"math/rand"
 	"os"
+	"time"
 
 	"fmt"
 
@@ -17,11 +19,14 @@ var (
 	interviewURL = kingpin.Arg("url", "The url to the interview to complete.").Required().String()
 )
 
+var random = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 func main() {
 	kingpin.CommandLine.Version("1.0.0")
 	kingpin.CommandLine.Help =
 		"This tool can complete questionnaires of any number of questions, that " +
-			"constist of only category questions, with no validations."
+			"constist of category, open or number questions, with simple validations " +
+			"and no blocks or matrix."
 	kingpin.CommandLine.HelpFlag.Short('h')
 	kingpin.Parse()
 

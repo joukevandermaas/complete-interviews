@@ -34,50 +34,15 @@ ErrorMessages = { InvalidCategory: 'The chosen category is not present in the li
           <div class="validation-message">
             <span class="message">
             </span>
-          </div>                
+          </div>
           <div class="group text question">
             <p>
-            <span class="style-0">This is very important.<br /></span>
+            <span class="style-0">Please enter a nice round number<br /></span>
             </p>
           </div>
-          <div class="group categorylist">
-            <div id="categorylist-q1" class="categorylist categories required " data-minimum="1" data-maximum="3">
-              <input type="hidden" class="answerOrder" name="answer-q1-m" id="categorylist-q1-multi" value="" />
-              <div class="categorygroup" data-bind="visible: isVisible($element)">
-                <div id="category-q1-2" class="category multi first "  data-bind="visible: isVisible($element)">
-                  <div class="category-padding">
-                    <div class="category-input">
-                      <input id="q1-2" class="category" name="answer-q1-2" value="q1-2" type="checkbox" />
-                    </div>
-              <div class="category-label">
-                <span class="style-0">Answer dos</span>
-              </div>
-              <div class="clearboth"></div>
-                  </div>
-                </div>
-                <div id="category-q1-3" class="category multi  "  data-bind="visible: isVisible($element)">
-                  <div class="category-padding">
-                    <div class="category-input">
-                      <input id="q1-3" class="category" name="answer-q1-3" value="q1-3" type="checkbox" />
-                    </div>
-                    <div class="category-label">
-                      <span class="style-0">Answer tres</span>
-                    </div>
-                    <div class="clearboth"></div>
-                  </div>
-                </div>
-                <div id="category-q1-1" class="category multi  last"  data-bind="visible: isVisible($element)">
-                  <div class="category-padding">
-                    <div class="category-input">
-                      <input id="q1-1" class="category" name="answer-q1-1" value="q1-1" type="checkbox" />
-                    </div>
-                    <div class="category-label">
-                      <span class="style-0">Answer uno</span>
-                    </div>
-                    <div class="clearboth"></div>
-                  </div>
-                </div>
-              </div>
+          <div class="group open-group">
+            <div class="container open"  data-bind="visible: isVisible($element)">
+              <input id="q1" type="text" class="open number required" value=""  name="answer-q1" data-fraction-length="0" data-number-of-decimals="2" data-minimum="5" data-maximum="15" data-range=""  />
             </div>
           </div>
         </div>

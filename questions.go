@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"net/url"
 	"regexp"
 	"strings"
@@ -19,6 +18,7 @@ type nodeHandler func(*html.Node)
 const (
 	qTypeOpenMulti  = "OpenMulti"
 	qTypeOpenSingle = "OpenSingle"
+	qTypeNumber     = "Number"
 	qTypeCategory   = "Category"
 	qTypePage       = "Page"
 )
@@ -60,6 +60,8 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 		err = setOpenMultiQuestionValues(doc, result)
 	case qTypeOpenSingle:
 		err = setOpenSingleQuestionValues(doc, result)
+	case qTypeNumber:
+		err = setNumberQuestionValues(doc, result)
 	}
 
 	if err != nil {
@@ -74,7 +76,8 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 func getQuestionType(document *html.Node) string {
 	foundTextArea := false
 	foundCategoryInput := false
-	foundQuestionInput := false
+	foundAlphaInput := false
+	foundNumberInput := false
 
 	categoryRegexp := regexp.MustCompile("categorylist-(q\\d+)-multi")
 	questionRegexp := regexp.MustCompile("q\\d+")
@@ -90,11 +93,15 @@ func getQuestionType(document *html.Node) string {
 
 			hasSimpleID := questionRegexp.MatchString(attrs["id"])
 			hasAnswerName := attrs["name"] == "answer-"+attrs["id"]
-			typeIsText := attrs["type"] == "text"
+			classIsAlpha := strings.Contains(attrs["class"], "alpha") || strings.Contains(attrs["class"], "text")
+			classIsNumber := strings.Contains(attrs["class"], "number")
 
-			if hasSimpleID && hasAnswerName && typeIsText {
-
-				foundQuestionInput = true
+			if hasSimpleID && hasAnswerName {
+				if classIsAlpha {
+					foundAlphaInput = true
+				} else if classIsNumber {
+					foundNumberInput = true
+				}
 			}
 		}
 	})
@@ -103,8 +110,10 @@ func getQuestionType(document *html.Node) string {
 		return qTypeOpenMulti
 	} else if foundCategoryInput {
 		return qTypeCategory
-	} else if foundQuestionInput {
+	} else if foundAlphaInput {
 		return qTypeOpenSingle
+	} else if foundNumberInput {
+		return qTypeNumber
 	}
 
 	return qTypePage
@@ -135,6 +144,41 @@ func setOpenMultiQuestionValues(document *html.Node, result url.Values) error {
 	})
 
 	return nil
+}
+
+func setNumberQuestionValues(document *html.Node, result url.Values) error {
+	questionRegexp := regexp.MustCompile("q\\d+")
+	var innerError error
+
+	walkDocumentByTag(document, "input", func(node *html.Node) {
+		attrs := attrsToMap(node.Attr)
+
+		if questionRegexp.MatchString(attrs["id"]) {
+			minValue := 0
+			maxValue := 99
+
+			if strVal, ok := attrs["data-minimum"]; ok {
+				value, err := parseInt(strVal)
+				if err != nil {
+					innerError = err
+					return
+				}
+				minValue = value
+			}
+			if strVal, ok := attrs["data-maximum"]; ok {
+				value, err := parseInt(strVal)
+				if err != nil {
+					innerError = err
+					return
+				}
+				maxValue = value
+			}
+
+			result.Set(attrs["name"], strconv.Itoa(random.Intn(maxValue-minValue)+minValue))
+		}
+	})
+
+	return innerError
 }
 
 func setOpenSingleQuestionValues(document *html.Node, result url.Values) error {
@@ -173,19 +217,14 @@ func setOpenSingleQuestionValues(document *html.Node, result url.Values) error {
 }
 
 func setCategoryQuestionValues(document *html.Node, result url.Values) error {
-	questionRegex, err := regexp.Compile("categorylist-(q\\d+)-multi")
-	if err != nil {
-		return err
-	}
-
-	answerRegex, err := regexp.Compile("answer-(q\\d+)(-\\d+)?")
-	if err != nil {
-		return err
-	}
+	questionRegex := regexp.MustCompile("categorylist-(q\\d+)-multi")
+	answerRegex := regexp.MustCompile("answer-(q\\d+)(-\\d+)?")
 
 	var questionNumber string
 	var answerOptions []string
 	var answerFullValue []string
+	minChoices := 1
+	maxChoices := 1
 
 	walkDocumentByTag(document, "input", func(input *html.Node) {
 		attrs := attrsToMap(input.Attr)
@@ -218,24 +257,63 @@ func setCategoryQuestionValues(document *html.Node, result url.Values) error {
 		}
 	})
 
+	var innerError error
+	walkDocument(document, func(element *html.Node) {
+		attrs := attrsToMap(element.Attr)
+
+		if attrs["id"] == "categorylist-"+questionNumber {
+
+			if strVal, ok := attrs["data-minimum"]; ok {
+				value, err := parseInt(strVal)
+				if err != nil {
+					innerError = err
+					return
+				}
+				minChoices = value
+				if minChoices > maxChoices {
+					maxChoices = minChoices
+				}
+			}
+			if strVal, ok := attrs["data-maximum"]; ok {
+				value, err := parseInt(strVal)
+				if err != nil {
+					innerError = err
+					return
+				}
+				maxChoices = value
+			}
+		}
+	})
+
 	if len(answerOptions) > 0 {
-		pickedAnswerIndex := rand.Intn(len(answerOptions))
-		pickedAnswer := answerOptions[pickedAnswerIndex]
-		pickedAnswerDescription := answerFullValue[pickedAnswerIndex]
+		for i := 0; i < minChoices; i++ {
+			pickedAnswerIndex := random.Intn(len(answerOptions))
+			pickedAnswer := answerOptions[pickedAnswerIndex]
+			pickedAnswerDescription := answerFullValue[pickedAnswerIndex]
 
-		writeVerbose("picked answer", fmt.Sprintf("%d\n", pickedAnswerIndex))
-		writeVerbose("options", fmt.Sprintf("%v\n", answerOptions))
-		writeVerbose("descriptions", fmt.Sprintf("%v\n", answerFullValue))
+			// remove item from arrays after we've picked it (to prevent duplicates)
+			answerOptions = append(answerOptions[:pickedAnswerIndex], answerOptions[pickedAnswerIndex+1:]...)
+			answerFullValue = append(answerFullValue[:pickedAnswerIndex], answerFullValue[pickedAnswerIndex+1:]...)
 
-		result.Set(
-			fmt.Sprintf("answer-%s-m", questionNumber),
-			pickedAnswer)
-		result.Set(
-			fmt.Sprintf("answer-%s", pickedAnswerDescription),
-			fmt.Sprintf("%s-%s", questionNumber, pickedAnswer))
+			result.Add(
+				fmt.Sprintf("answer-%s-m", questionNumber),
+				pickedAnswer)
+			result.Add(
+				fmt.Sprintf("answer-%s", pickedAnswerDescription),
+				fmt.Sprintf("%s-%s", questionNumber, pickedAnswer))
+		}
 	}
 
 	return nil
+}
+
+func arrayContains(list []string, value string) bool {
+	for _, elem := range list {
+		if value == elem {
+			return true
+		}
+	}
+	return false
 }
 
 func walkDocumentByTag(node *html.Node, tag string, handler nodeHandler) {
