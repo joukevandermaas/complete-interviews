@@ -9,15 +9,18 @@ import (
 
 	lorem "github.com/drhodes/golorem"
 
+	"strconv"
+
 	"golang.org/x/net/html"
 )
 
 type nodeHandler func(*html.Node)
 
 const (
-	qTypeOpenMulti = "OpenMulti"
-	qTypeCategory  = "Category"
-	qTypePage      = "Page"
+	qTypeOpenMulti  = "OpenMulti"
+	qTypeOpenSingle = "OpenSingle"
+	qTypeCategory   = "Category"
+	qTypePage       = "Page"
 )
 
 func getInterviewResponse(document *string, previousHistoryOrder string) (url.Values, string, error) {
@@ -48,11 +51,15 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 
 	questionType := getQuestionType(doc)
 
+	writeVerbose("question-type", fmt.Sprintf("%s\n", questionType))
+
 	switch questionType {
 	case qTypeCategory:
 		err = setCategoryQuestionValues(doc, result)
 	case qTypeOpenMulti:
 		err = setOpenMultiQuestionValues(doc, result)
+	case qTypeOpenSingle:
+		err = setOpenSingleQuestionValues(doc, result)
 	}
 
 	if err != nil {
@@ -67,16 +74,27 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 func getQuestionType(document *html.Node) string {
 	foundTextArea := false
 	foundCategoryInput := false
+	foundQuestionInput := false
 
-	reg := regexp.MustCompile("categorylist-(q\\d+)-multi")
+	categoryRegexp := regexp.MustCompile("categorylist-(q\\d+)-multi")
+	questionRegexp := regexp.MustCompile("q\\d+")
 
 	walkDocument(document, func(node *html.Node) {
 		if node.Data == "textarea" {
 			foundTextArea = true
 		} else if node.Data == "input" {
 			attrs := attrsToMap(node.Attr)
-			if reg.MatchString(attrs["id"]) {
+			if categoryRegexp.MatchString(attrs["id"]) {
 				foundCategoryInput = true
+			}
+
+			hasSimpleID := questionRegexp.MatchString(attrs["id"])
+			hasAnswerName := attrs["name"] == "answer-"+attrs["id"]
+			typeIsText := attrs["type"] == "text"
+
+			if hasSimpleID && hasAnswerName && typeIsText {
+
+				foundQuestionInput = true
 			}
 		}
 	})
@@ -85,6 +103,8 @@ func getQuestionType(document *html.Node) string {
 		return qTypeOpenMulti
 	} else if foundCategoryInput {
 		return qTypeCategory
+	} else if foundQuestionInput {
+		return qTypeOpenSingle
 	}
 
 	return qTypePage
@@ -115,6 +135,41 @@ func setOpenMultiQuestionValues(document *html.Node, result url.Values) error {
 	})
 
 	return nil
+}
+
+func setOpenSingleQuestionValues(document *html.Node, result url.Values) error {
+	questionRegexp := regexp.MustCompile("q\\d+")
+	var innerError error
+
+	walkDocumentByTag(document, "input", func(node *html.Node) {
+		attrs := attrsToMap(node.Attr)
+
+		if questionRegexp.MatchString(attrs["id"]) {
+			minLength := 0
+			maxLength := 250
+
+			if strVal, ok := attrs["minlength"]; ok {
+				value, err := parseInt(strVal)
+				if err != nil {
+					innerError = err
+					return
+				}
+				minLength = value
+			}
+			if strVal, ok := attrs["maxlength"]; ok {
+				value, err := parseInt(strVal)
+				if err != nil {
+					innerError = err
+					return
+				}
+				maxLength = value
+			}
+
+			result.Set(attrs["name"], lorem.Word(minLength, maxLength))
+		}
+	})
+
+	return innerError
 }
 
 func setCategoryQuestionValues(document *html.Node, result url.Values) error {
@@ -211,4 +266,14 @@ func attrsToMap(attrs []html.Attribute) map[string]string {
 	}
 
 	return result
+}
+
+func parseInt(value string) (int, error) {
+	result, err := strconv.ParseInt(value, 0, 32)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return int(result), nil
 }
