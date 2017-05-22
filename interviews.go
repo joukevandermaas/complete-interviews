@@ -22,9 +22,7 @@ type pageContent struct {
 var requestTimeout = time.Duration(30 * time.Second)
 var endOfInterviewPath = "/Home/Completed"
 
-func processInterviews() int {
-	requestURL := (*interviewURL).String()
-
+func processInterviews(done *int, errors *int) {
 	if *maxConcurrency < 1 {
 		*maxConcurrency = 1
 	}
@@ -59,7 +57,7 @@ func processInterviews() int {
 
 	fmt.Printf("Starting interviews (%d concurrently%s)...\n", *maxConcurrency, waitTimeString)
 	for i := 0; i < *count; i++ {
-		chInterviews <- &requestURL
+		chInterviews <- interviewURL
 	}
 
 	for i := 0; i < *maxConcurrency; i++ {
@@ -79,27 +77,21 @@ func processInterviews() int {
 		printNo = 1
 	}
 
-	errors := 0
-	done := 0
-	for done < *count {
-		if done%printNo == 0 {
-			fmt.Printf("completed: %4d of %d\n", done, *count)
+	for *done < *count {
+		if (*done)%printNo == 0 {
+			fmt.Printf("completed: %4d of %d\n", *done, *count)
 		}
 
 		err := <-chResults
-		done++
+		(*done)++
 
-		writeVerbose("info", "done: %4d; errors: %4d; queue: %4d\n", done, errors, len(chInterviews))
+		writeVerbose("info", "done: %4d; errors: %4d; queue: %4d\n", *done, *errors, len(chInterviews))
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
-			errors++
+			(*errors)++
 		}
 	}
-
-	fmt.Printf("\nFinished: successfully completed %d of %d interviews\n", done-errors, *count)
-
-	return errors
 }
 
 func performInterview(url *string, ch chan error) {

@@ -1,7 +1,7 @@
 *PAGE
-[title]Welcome[/title]
+Welcome
 
-[salutation]This is a welcome page[/salutation]
+This is a welcome page
 
 I hope you like it
 
