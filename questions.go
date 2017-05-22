@@ -7,24 +7,17 @@ import (
 	"regexp"
 	"strings"
 
+	lorem "github.com/drhodes/golorem"
+
 	"golang.org/x/net/html"
 )
 
 type nodeHandler func(*html.Node)
 
-/**
-
-refactor idea:
-
-scan through the document one time, figure out question type(s)
-
-then using this knowledge, scan through it again to get the correct info
-
-**/
-
 const (
 	qTypeOpenMulti = "OpenMulti"
 	qTypeCategory  = "Category"
+	qTypePage      = "Page"
 )
 
 func getInterviewResponse(document *string, previousHistoryOrder string) (url.Values, string, error) {
@@ -73,18 +66,28 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 
 func getQuestionType(document *html.Node) string {
 	foundTextArea := false
+	foundCategoryInput := false
+
+	reg := regexp.MustCompile("categorylist-(q\\d+)-multi")
 
 	walkDocument(document, func(node *html.Node) {
 		if node.Data == "textarea" {
 			foundTextArea = true
+		} else if node.Data == "input" {
+			attrs := attrsToMap(node.Attr)
+			if reg.MatchString(attrs["id"]) {
+				foundCategoryInput = true
+			}
 		}
 	})
 
 	if foundTextArea {
 		return qTypeOpenMulti
+	} else if foundCategoryInput {
+		return qTypeCategory
 	}
 
-	return qTypeCategory
+	return qTypePage
 }
 
 func setCommonValues(document *html.Node, result url.Values) error {
@@ -108,7 +111,7 @@ func setOpenMultiQuestionValues(document *html.Node, result url.Values) error {
 	walkDocumentByTag(document, "textarea", func(node *html.Node) {
 		attrs := attrsToMap(node.Attr)
 
-		result.Set(attrs["name"], "hello suckers")
+		result.Set(attrs["name"], lorem.Paragraph(2, 5))
 	})
 
 	return nil
