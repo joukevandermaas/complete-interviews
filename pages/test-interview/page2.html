@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html dir="LTR">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+            <title>Nfield Web Interviewing Demo</title>
+        <link rel="shortcut icon" href="/Content/favicon-nfield.ico" type="image/x-icon" />
+        <!-- referenced template specific stylesheet files -->
+        <link rel="StyleSheet" type="text/css" href="https://az836249.vo.msecnd.net/6347.20776/Content/Default/jquery-ui.css" />
+<link rel="StyleSheet" type="text/css" href="https://az836249.vo.msecnd.net/6347.20776/Content/Default/nfield.interview.css" />
+
+        
+        <!-- error messages -->
+        
+        
+    
+    
+        <script type="text/javascript">
+        ErrorMessages = { InvalidCategory: 'The chosen category is not present in the list of available categories.',ExclusiveCategory: 'Category {category} cannot be used together with other categories',TooManyDigitsFraction: 'Answer {answer} has too many fractional digits, maximum is {maximumDigits}',AnswerTooLong: 'Answer {answer} is too long, maximum is {numberOfCharacters}',MustBeNumeric: 'Answer {answer} must be numeric',MoreThanMaximum: 'Answer {answer} is too big, maximum is {maximum}',LessThanMinimum: 'Answer {answer} is too small, minimum is {minimum}',TooManyDigitsInIntegerPart: 'Answer {answer} has too many digits, maximum is {maximum}',NotInRange: 'Answer {answer} is not in the permitted range, permitted range is {range}',AnswerRequired: 'An answer is required',CategoryAnswerRequired: 'Please specify an answer for {category}',ItemAnswerRequired: 'Please specify an answer for {item}',TooManyAnswers: 'Too many answers, maximum is {maximum}',TooFewAnswers: 'Too few answers, minimum is {minimum}',InterviewButtonUnavailable: 'Interview button is not available',DoNotUseBrowserButtonToNavigate: 'Do not use browser navigation buttons, use interview buttons instead',DoNotUseButtonWithOtherAnswer: 'The answer "{item}" cannot be used in conjunction with other answers' };
+        </script>
+
+
+
+        <!-- referenced template specific javascript files -->
+        <script type="text/javascript" src="https://az836249.vo.msecnd.net/6347.20776/Scripts/Default/jquery-1.8.3.min.js"></script>
+<script type="text/javascript" src="https://az836249.vo.msecnd.net/6347.20776/Scripts/Default/jquery-ui.min.js"></script>
+<script type="text/javascript" src="https://az836249.vo.msecnd.net/6347.20776/Scripts/Default/knockout-3.2.0.js"></script>
+<script type="text/javascript" src="https://az836249.vo.msecnd.net/6347.20776/Scripts/Default/jquery.nfield-numeric.min.js"></script>
+<script type="text/javascript" src="https://az836249.vo.msecnd.net/6347.20776/Scripts/Default/jquery.calculation.custom.min.js"></script>
+<script type="text/javascript" src="https://az836249.vo.msecnd.net/6347.20776/Scripts/Default/nfield.validation.min.js"></script>
+<script type="text/javascript" src="https://az836249.vo.msecnd.net/6347.20776/Scripts/Default/nfield.main.min.js"></script>
+
+
+        <!-- reference styles defined in questionnaire -->
+        
+        
+    
+    
+        <style type="text/css">
+        
+        </style>
+
+
+
+        
+    </head>
+    <body class="niposoftware" data-startid="">
+        
+    
+
+
+
+
+
+<div id="interview-screen">
+  <div class="previous-segments">
+  </div>
+  <form method="post" action="">
+    <input id="screenId" name="screenId" type="hidden" value="e799353a-cc7c-42e3-be58-e31c7fa4f806">
+    <input id="historyOrder" name="historyOrder" type="hidden" value="1">
+    <div id="segment-q10" class="segment active " data-surveyid="8e386127-0928-47fc-9beb-5d9171639ccd" data-interviewid="" data-columns="1" data-bind="visible: isVisible($element)">
+<div class="validation-message">
+    <span class="message">
+    </span>
+</div>                <div class="group text question">
+<p>
+        <span class="style-0">This is a single coded question.<br /></span>
+</p>
+                </div>
+                <div class="group categorylist">
+
+
+
+<div id="categorylist-q10" class="categorylist categories required " >
+            <input type="hidden" class="answerOrder" name="answer-q10-m" id="categorylist-q10-multi" value="" />
+
+
+<div class="categorygroup" data-bind="visible: isVisible($element)">
+    <div id="category-q10-4" class="category single first "  data-bind="visible: isVisible($element)">
+<div class="category-padding">
+<div class="category-input">
+    <input id="q10-4" class="category" name="answer-q10" value="q10-4" type="radio" />
+</div>
+<div class="category-label">
+        <span class="style-0">Fourth answer</span>
+
+</div>
+<div class="clearboth"></div>
+</div>
+    </div>
+    <div id="category-q10-3" class="category single  "  data-bind="visible: isVisible($element)">
+<div class="category-padding">
+<div class="category-input">
+    <input id="q10-3" class="category" name="answer-q10" value="q10-3" type="radio" />
+</div>
+<div class="category-label">
+        <span class="style-0">Third answer</span>
+
+</div>
+<div class="clearboth"></div>
+</div>
+    </div>
+    <div id="category-q10-2" class="category single  "  data-bind="visible: isVisible($element)">
+<div class="category-padding">
+<div class="category-input">
+    <input id="q10-2" class="category" name="answer-q10" value="q10-2" type="radio" />
+</div>
+<div class="category-label">
+        <span class="style-0">Second answer</span>
+
+</div>
+<div class="clearboth"></div>
+</div>
+    </div>
+    <div id="category-q10-1" class="category single  "  data-bind="visible: isVisible($element)">
+<div class="category-padding">
+<div class="category-input">
+    <input id="q10-1" class="category" name="answer-q10" value="q10-1" type="radio" />
+</div>
+<div class="category-label">
+        <span class="style-0">First answer</span>
+
+</div>
+<div class="clearboth"></div>
+</div>
+    </div>
+    <div id="category-q10-5" class="category single  last"  data-bind="visible: isVisible($element)">
+<div class="category-padding">
+<div class="category-input">
+    <input id="q10-5" class="category" name="answer-q10" value="q10-5" type="radio" />
+</div>
+<div class="category-label">
+        <span class="style-0">Fifth answer</span>
+
+</div>
+<div class="clearboth"></div>
+</div>
+    </div>
+
+</div></div>
+                </div>
+
+    </div>
+
+
+
+
+    <div id="segment-end">
+<div id="navigation-container">
+    <input type="submit" name="button-next" value="Next" class="button button-next" />
+    <input type="submit" name="button-clear" value="Clear" class="button button-clear" />
+</div>
+
+    </div>
+  </form>
+
+</div>
+
+    </body>
+</html>

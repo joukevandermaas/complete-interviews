@@ -41,7 +41,7 @@ func processInterviews(done *int, errors *int) {
 		waitTimeString = ""
 	}
 
-	fmt.Printf("Starting interviews (%d concurrently%s)...\n", *maxConcurrency, waitTimeString)
+	writeOutput("Starting interviews (%d concurrently%s)...\n", *maxConcurrency, waitTimeString)
 	for i := 0; i < *count; i++ {
 		chInterviews <- interviewURL
 	}
@@ -50,14 +50,13 @@ func processInterviews(done *int, errors *int) {
 		writeVerbose("thread", "Starting thread to process interviews...\n")
 
 		go func(in chan *string, out chan error) {
-			resultChannel := make(chan error)
 			for len(in) > 0 {
 				nextInterview := <-in
 
 				writeVerbose("picked up interview", "%s\n", *nextInterview)
 
-				go performInterview(nextInterview, resultChannel)
-				out <- <-resultChannel
+				err := performInterview(nextInterview)
+				out <- err
 			}
 
 			writeVerbose("thread", "Stopping thread to process interviews...\n")
@@ -66,7 +65,7 @@ func processInterviews(done *int, errors *int) {
 
 	go func() {
 		for *done < *count {
-			fmt.Printf("completed: %4d of %d (%2d%%), %4d errors\n", *done, *count, (*done*100) / *count, *errors)
+			writeOutput("completed: %4d of %d (%2d%%), %4d errors\n", *done, *count, (*done*100) / *count, *errors)
 			time.Sleep(4 * time.Second)
 		}
 	}()
@@ -78,22 +77,20 @@ func processInterviews(done *int, errors *int) {
 		writeVerbose("info", "done: %4d; errors: %4d; queue: %4d\n", *done, *errors, len(chInterviews))
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+			writeError(err)
 			(*errors)++
 		}
 	}
 }
 
-func performInterview(url *string, ch chan error) {
+func performInterview(url *string) error {
 	chInterviews := make(chan pageContent)
 
 	go getContent(url, chInterviews)
 	result := <-chInterviews
 
 	if result.err != nil {
-		ch <- result.err
-
-		return
+		return result.err
 	}
 
 	prevHistoryOrder := ""
@@ -103,7 +100,7 @@ func performInterview(url *string, ch chan error) {
 		newRequest, historyOrder, err := getInterviewResponse(result.body, prevHistoryOrder)
 
 		if err != nil {
-			ch <- err
+			return err
 		}
 
 		go postContent(result.url, newRequest, chInterviews)
@@ -111,20 +108,20 @@ func performInterview(url *string, ch chan error) {
 		result = <-chInterviews
 
 		if result.err != nil {
-			ch <- result.err
-			return
+			return err
 		}
 
 		hasAnotherQuestion = !strings.Contains(*result.url, endOfInterviewPath)
 		prevHistoryOrder = historyOrder
 
-		writeVerbose("================================", "\n")
+		writeVerbose("NEW-QUESTION", "================================\n")
 	}
 
-	ch <- nil
+	return nil
 }
 
-func postContent(url *string, body url.Values, ch chan pageContent) {
+/* mockable */
+var postContent = func(url *string, body url.Values, ch chan pageContent) {
 	if *waitBetweenPosts > 0 {
 		time.Sleep(time.Duration(*waitBetweenPosts) * time.Second)
 	}
@@ -138,7 +135,8 @@ func postContent(url *string, body url.Values, ch chan pageContent) {
 	ch <- handleHTTPResult(response, err)
 }
 
-func getContent(url *string, ch chan pageContent) {
+/* mockable */
+var getContent = func(url *string, ch chan pageContent) {
 	client := http.Client{
 		Timeout: requestTimeout,
 	}
@@ -170,6 +168,7 @@ func handleHTTPResult(response *http.Response, err error) pageContent {
 			return pageContent{err: err}
 		}
 	}
+	httpTime++
 
 	str := buf.String()
 
@@ -179,6 +178,5 @@ func handleHTTPResult(response *http.Response, err error) pageContent {
 		result.err = fmt.Errorf("http request was unsuccessful: %s (url: %s)", response.Status, url)
 	}
 
-	httpTime++
 	return result
 }

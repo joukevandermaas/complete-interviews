@@ -174,7 +174,7 @@ func setNumberQuestionValues(document *html.Node, result url.Values) error {
 				maxValue = value
 			}
 
-			result.Set(attrs["name"], strconv.Itoa(random.Intn(maxValue-minValue)+minValue))
+			result.Set(attrs["name"], strconv.Itoa(random.Intn(maxValue-minValue+1)+minValue))
 		}
 	})
 
@@ -209,7 +209,7 @@ func setOpenSingleQuestionValues(document *html.Node, result url.Values) error {
 				maxLength = value
 			}
 
-			result.Set(attrs["name"], lorem.Word(minLength, maxLength))
+			result.Set(attrs["name"], lorem.Word(minLength, maxLength+1))
 		}
 	})
 

@@ -65,8 +65,19 @@ func writeLastMessage(done int, errors int) {
 	}
 }
 
-func writeVerbose(label string, format string, args ...interface{}) {
+/* mockable */
+var writeVerbose = func(label string, format string, args ...interface{}) {
 	if *verboseOutput {
 		fmt.Printf("VERBOSE: "+label+":"+format, args...)
 	}
+}
+
+/* mockable */
+var writeOutput = func(format string, args ...interface{}) {
+	fmt.Printf(format, args...)
+}
+
+/* mockable */
+var writeError = func(err error) {
+	fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 }

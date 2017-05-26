@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -99,4 +101,67 @@ func flattenURLValues(values url.Values) map[string]string {
 	}
 
 	return result
+}
+
+func handleRequest(t *testing.T, path string, numberOfRequests *int) pageContent {
+	(*numberOfRequests)++
+
+	fileName := filepath.Join(path, fmt.Sprintf("page%d.html", *numberOfRequests))
+	url := path
+
+	if isLastFile(path, numberOfRequests) {
+		url = endOfInterviewPath
+	}
+
+	t.Logf("Doing request for %s", fileName)
+	bytes, err := ioutil.ReadFile(fileName)
+
+	if err != nil {
+		return pageContent{err: err}
+	}
+
+	content := string(bytes)
+
+	return pageContent{body: &content, url: &url}
+}
+
+func isLastFile(path string, number *int) bool {
+	fileName := filepath.Join(path, fmt.Sprintf("page%d.html", *number+1))
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		return true
+	}
+
+	return false
+}
+
+func setupMocking(t *testing.T, path string, numberOfRequests *int) {
+	*verboseOutput = false
+	*maxConcurrency = 1
+	*waitBetweenPosts = 0
+	*htmlOutputDir = ""
+
+	*count = 1
+	*interviewURL = path
+
+	postContent = func(url *string, body url.Values, ch chan pageContent) {
+		ch <- handleRequest(t, *url, numberOfRequests)
+	}
+
+	getContent = func(url *string, ch chan pageContent) {
+		ch <- handleRequest(t, *url, numberOfRequests)
+	}
+
+	writeError = func(err error) {
+		t.Error(err)
+	}
+
+	writeVerbose = func(label string, format string, args ...interface{}) {
+		if *verboseOutput {
+			t.Logf("VERBOSE: "+label+":"+format, args...)
+		}
+	}
+
+	writeOutput = func(format string, args ...interface{}) {
+		t.Logf(format, args...)
+	}
 }
