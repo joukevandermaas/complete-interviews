@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/signal"
 
-	tm "github.com/buger/goterm"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -17,71 +16,54 @@ func main() {
 	kingpin.CommandLine.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	tm.Clear()
+	currentStatus = &status{
+		completed: 0,
+		errored:   0,
+	}
 
-	done := 0
-	errors := 0
+	config = &configuration{
+		interviewURL: *interviewURLArg,
+		target:       *targetArg,
+
+		requestTimeout:   *requestTimeoutFlag,
+		waitBetweenPosts: *waitBetweenPostsFlag,
+		verboseOutput:    *verboseOutputFlag,
+		maxConcurrency:   *maxConcurrencyFlag,
+	}
+
+	ensureConsistentOptions()
+
+	printFirstMessage()
+
+	go printProgress()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		writeLastMessage(done, errors)
 
 		os.Exit(1)
 	}()
 
-	processInterviews(&done, &errors)
+	processInterviews()
 
-	writeLastMessage(done, errors)
+	clearScreen()
 
-	if errors > 0 {
+	printFinalMessage()
+
+	if currentStatus.errored > 0 {
 		os.Exit(1)
 	}
 }
 
-func writeLastMessage(done int, errors int) {
-	/*interviewWord := "interview"
-	if *count > 1 {
-		interviewWord += "s"
+func ensureConsistentOptions() {
+	if config.target < 1 {
+		config.target = 1
 	}
-	successful := done - errors*/
-}
-
-/* mockable things */
-
-var writeProgress = func(done *int, errors *int, count *int) {
-	/*spinner := `/-\|/---/|\-`
-	index := 0
-	percPerBlock := 100 / progressBarSize
-
-	for *done < *count {
-		percentDone := *done * 100 / *count
-		doneBlocks := percentDone / percPerBlock
-
-		if doneBlocks > progressBarSize {
-			doneBlocks = progressBarSize
-		}
-
-		if *verboseOutput {
-			writeOutput("completed: %4d of %4d (%2d%%), %4d errors\n",
-				*done,
-				*count,
-				percentDone,
-				*errors)
-			time.Sleep(4 * time.Second)
-		} else {
-			writeOutput("%s%s [%d%%] %s completed: %d of %d, %d errors",
-				strings.Repeat("▓", doneBlocks),
-				strings.Repeat("░", progressBarSize-doneBlocks),
-				percentDone,
-				string(spinner[index]),
-				*done,
-				*count,
-				*errors)
-			time.Sleep(250 * time.Millisecond)
-		}
-
-		index = (index + 1) % len(spinner)
-	}*/
+	if config.maxConcurrency < 1 {
+		config.maxConcurrency = 1
+	}
+	if config.maxConcurrency > config.target {
+		config.maxConcurrency = config.target
+	}
 }

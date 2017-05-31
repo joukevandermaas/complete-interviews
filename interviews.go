@@ -16,23 +16,15 @@ type pageContent struct {
 	err error
 }
 
-func processInterviews(done *int, errors *int) {
-	if *maxConcurrency < 1 {
-		*maxConcurrency = 1
-	}
-
-	if *maxConcurrency > *count {
-		*maxConcurrency = *count
-	}
-
-	chInterviews := make(chan *string, *count)
+func processInterviews() {
+	chInterviews := make(chan *string, config.target)
 	chResults := make(chan error)
 
-	for i := 0; i < *count; i++ {
-		chInterviews <- interviewURL
+	for i := 0; i < config.target; i++ {
+		chInterviews <- &config.interviewURL
 	}
 
-	for i := 0; i < *maxConcurrency; i++ {
+	for i := 0; i < config.maxConcurrency; i++ {
 		go func(in chan *string, out chan error) {
 			for len(in) > 0 {
 				nextInterview := <-in
@@ -43,14 +35,12 @@ func processInterviews(done *int, errors *int) {
 		}(chInterviews, chResults)
 	}
 
-	go writeProgress(done, errors, count)
-
-	for *done < *count {
+	for currentStatus.completed < config.target {
 		err := <-chResults
-		(*done)++
+		currentStatus.completed++
 
 		if err != nil {
-			(*errors)++
+			currentStatus.errored++
 		}
 	}
 }
@@ -92,12 +82,12 @@ func performInterview(url *string) error {
 
 /* mockable */
 var postContent = func(url *string, body url.Values, ch chan pageContent) {
-	if *waitBetweenPosts > 0 {
-		time.Sleep(time.Duration(*waitBetweenPosts) * time.Second)
+	if config.waitBetweenPosts > 0 {
+		time.Sleep(config.waitBetweenPosts)
 	}
 
 	client := http.Client{
-		Timeout: requestTimeout,
+		Timeout: config.requestTimeout,
 	}
 
 	response, err := client.Post(*url, "application/x-www-form-urlencoded", strings.NewReader(body.Encode()))
@@ -108,7 +98,7 @@ var postContent = func(url *string, body url.Values, ch chan pageContent) {
 /* mockable */
 var getContent = func(url *string, ch chan pageContent) {
 	client := http.Client{
-		Timeout: requestTimeout,
+		Timeout: config.requestTimeout,
 	}
 
 	response, err := client.Get(*url)
