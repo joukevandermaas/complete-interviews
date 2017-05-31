@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"fmt"
@@ -22,6 +23,7 @@ var (
 )
 
 var random = rand.New(rand.NewSource(time.Now().UnixNano()))
+var progressBarSize = 30
 
 func main() {
 	kingpin.CommandLine.Version("1.0.0")
@@ -33,7 +35,7 @@ func main() {
 	kingpin.Parse()
 
 	if *htmlOutputDir != "" {
-		fmt.Printf("Writing html output to '%s/page{n}.html'.\n", *htmlOutputDir)
+		writeOutput("Writing html output to '%s/page{n}.html'.\n", *htmlOutputDir)
 	}
 
 	done := 0
@@ -43,6 +45,7 @@ func main() {
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
+		writeOutput("Stopped completing interviews.%s\n", strings.Repeat(" ", progressBarSize*2))
 		writeLastMessage(done, errors)
 
 		os.Exit(1)
@@ -58,26 +61,71 @@ func main() {
 }
 
 func writeLastMessage(done int, errors int) {
-	fmt.Printf("\nFinished: successfully completed %d of %d interviews\n", done-errors, *count)
+	interviewWord := "interview"
+	if *count > 1 {
+		interviewWord += "s"
+	}
+	successful := done - errors
+
+	writeOutput("Finished: successfully completed %d of %d %s (%d%%)%s\n",
+		successful,
+		*count,
+		interviewWord,
+		(successful*100) / *count,
+		strings.Repeat(" ", progressBarSize))
 
 	if errors > 0 {
 		fmt.Fprintf(os.Stderr, "There were %d errors.\n", errors)
 	}
 }
 
-/* mockable */
+/* mockable things */
 var writeVerbose = func(label string, format string, args ...interface{}) {
 	if *verboseOutput {
-		fmt.Printf("VERBOSE: "+label+":"+format, args...)
+		fmt.Printf("\r[VERBOSE] "+label+": "+format, args...)
 	}
 }
 
-/* mockable */
 var writeOutput = func(format string, args ...interface{}) {
-	fmt.Printf(format, args...)
+	fmt.Printf("\r"+format, args...)
 }
 
-/* mockable */
 var writeError = func(err error) {
-	fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+	fmt.Fprintf(os.Stderr, "\rERROR: %v%s\n", err, strings.Repeat(" ", progressBarSize))
+}
+
+var writeProgress = func(done *int, errors *int, count *int) {
+	spinner := `/-\|/---/|\-`
+	index := 0
+	percPerBlock := 100 / progressBarSize
+
+	for *done < *count {
+		percentDone := *done * 100 / *count
+		doneBlocks := percentDone / percPerBlock
+
+		if doneBlocks > progressBarSize {
+			doneBlocks = progressBarSize
+		}
+
+		if *verboseOutput {
+			writeOutput("completed: %4d of %4d (%2d%%), %4d errors\n",
+				*done,
+				*count,
+				percentDone,
+				*errors)
+			time.Sleep(4 * time.Second)
+		} else {
+			writeOutput("%s%s [%d%%] %s completed: %d of %d, %d errors",
+				strings.Repeat("▓", doneBlocks),
+				strings.Repeat("░", progressBarSize-doneBlocks),
+				percentDone,
+				string(spinner[index]),
+				*done,
+				*count,
+				*errors)
+			time.Sleep(250 * time.Millisecond)
+		}
+
+		index = (index + 1) % len(spinner)
+	}
 }

@@ -36,12 +36,19 @@ func processInterviews(done *int, errors *int) {
 
 	var waitTimeString string
 	if *waitBetweenPosts > 0 {
-		waitTimeString = fmt.Sprintf(", waiting %ds between questions", *waitBetweenPosts)
+		waitTimeString = fmt.Sprintf(" (waiting %ds between questions)", *waitBetweenPosts)
 	} else {
 		waitTimeString = ""
 	}
 
-	writeOutput("Starting interviews (%d concurrently%s)...\n", *maxConcurrency, waitTimeString)
+	if *count > 1 {
+		writeOutput("Will complete %d interviews, %d concurrently%s.\n",
+			*count,
+			*maxConcurrency,
+			waitTimeString)
+	} else {
+		writeOutput("Starting interview...\n")
+	}
 	for i := 0; i < *count; i++ {
 		chInterviews <- interviewURL
 	}
@@ -63,12 +70,7 @@ func processInterviews(done *int, errors *int) {
 		}(chInterviews, chResults)
 	}
 
-	go func() {
-		for *done < *count {
-			writeOutput("completed: %4d of %d (%2d%%), %4d errors\n", *done, *count, (*done*100) / *count, *errors)
-			time.Sleep(4 * time.Second)
-		}
-	}()
+	go writeProgress(done, errors, count)
 
 	for *done < *count {
 		err := <-chResults

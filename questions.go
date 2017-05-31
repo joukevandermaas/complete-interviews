@@ -37,8 +37,6 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 		return nil, "", err
 	}
 
-	writeVerbose("common-values", fmt.Sprintf("%v\n", result))
-
 	var historyOrder string
 
 	if val, ok := result["historyOrder"]; ok {
@@ -230,10 +228,8 @@ func setCategoryQuestionValues(document *html.Node, result url.Values) error {
 		attrs := attrsToMap(input.Attr)
 
 		matched := questionRegex.FindAllStringSubmatch(attrs["id"], 1)
-		writeVerbose("attrs", "%v\n", attrs)
 
 		if len(matched) > 0 {
-			writeVerbose("matched questions", "%v\n", matched[0])
 			questionNumber = matched[0][1]
 
 			return // read: move on to next input
@@ -242,16 +238,13 @@ func setCategoryQuestionValues(document *html.Node, result url.Values) error {
 		matched = answerRegex.FindAllStringSubmatch(attrs["name"], 1)
 
 		if len(matched) > 0 {
-			writeVerbose("matched answers", "%v\n", matched[0])
 			answerOptions = append(answerOptions, strings.TrimPrefix(attrs["value"], questionNumber+"-"))
 
 			if len(matched[0]) > 2 {
 				fullValue := fmt.Sprintf("%s%s", matched[0][1], matched[0][2])
-				writeVerbose("full value", "%s (>2)\n", fullValue)
 				answerFullValue = append(answerFullValue, fullValue)
 			} else {
 				fullValue := matched[0][1]
-				writeVerbose("full value", "%s (>1)\n", fullValue)
 				answerFullValue = append(answerFullValue, fullValue)
 			}
 		}

@@ -164,4 +164,8 @@ func setupMocking(t *testing.T, path string, numberOfRequests *int) {
 	writeOutput = func(format string, args ...interface{}) {
 		t.Logf(format, args...)
 	}
+
+	writeProgress = func(done *int, errors *int, count *int) {
+
+	}
 }
