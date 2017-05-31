@@ -1,29 +1,12 @@
 package main
 
 import (
-	"math/rand"
 	"os"
 	"os/signal"
-	"strings"
-	"time"
 
-	"fmt"
-
+	tm "github.com/buger/goterm"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
-
-var (
-	verboseOutput    = kingpin.Flag("verbose", "Enable verbose output for debugging purposes").Short('v').Default("false").Bool()
-	maxConcurrency   = kingpin.Flag("concurrency", "Maximum number of concurrent interviews").Short('c').Default("10").Int()
-	waitBetweenPosts = kingpin.Flag("wait-time", "Wait time in seconds between answering questions").Short('w').Default("0").Int()
-	htmlOutputDir    = kingpin.Flag("output-html-to", "Enable writing fetched html pages to the specified directory").ExistingDir()
-
-	count        = kingpin.Arg("count", "The number of completes to generate.").Required().Int()
-	interviewURL = kingpin.Arg("url", "The url to the interview to complete.").Required().String()
-)
-
-var random = rand.New(rand.NewSource(time.Now().UnixNano()))
-var progressBarSize = 30
 
 func main() {
 	kingpin.CommandLine.Version("1.0.0")
@@ -34,9 +17,7 @@ func main() {
 	kingpin.CommandLine.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	if *htmlOutputDir != "" {
-		writeOutput("Writing html output to '%s/page{n}.html'.\n", *htmlOutputDir)
-	}
+	tm.Clear()
 
 	done := 0
 	errors := 0
@@ -45,7 +26,6 @@ func main() {
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		writeOutput("Stopped completing interviews.%s\n", strings.Repeat(" ", progressBarSize*2))
 		writeLastMessage(done, errors)
 
 		os.Exit(1)
@@ -61,41 +41,17 @@ func main() {
 }
 
 func writeLastMessage(done int, errors int) {
-	interviewWord := "interview"
+	/*interviewWord := "interview"
 	if *count > 1 {
 		interviewWord += "s"
 	}
-	successful := done - errors
-
-	writeOutput("Finished: successfully completed %d of %d %s (%d%%)%s\n",
-		successful,
-		*count,
-		interviewWord,
-		(successful*100) / *count,
-		strings.Repeat(" ", progressBarSize))
-
-	if errors > 0 {
-		fmt.Fprintf(os.Stderr, "There were %d errors.\n", errors)
-	}
+	successful := done - errors*/
 }
 
 /* mockable things */
-var writeVerbose = func(label string, format string, args ...interface{}) {
-	if *verboseOutput {
-		fmt.Printf("\r[VERBOSE] "+label+": "+format, args...)
-	}
-}
-
-var writeOutput = func(format string, args ...interface{}) {
-	fmt.Printf("\r"+format, args...)
-}
-
-var writeError = func(err error) {
-	fmt.Fprintf(os.Stderr, "\rERROR: %v%s\n", err, strings.Repeat(" ", progressBarSize))
-}
 
 var writeProgress = func(done *int, errors *int, count *int) {
-	spinner := `/-\|/---/|\-`
+	/*spinner := `/-\|/---/|\-`
 	index := 0
 	percPerBlock := 100 / progressBarSize
 
@@ -127,5 +83,5 @@ var writeProgress = func(done *int, errors *int, count *int) {
 		}
 
 		index = (index + 1) % len(spinner)
-	}
+	}*/
 }
