@@ -42,14 +42,16 @@ func main() {
 	go func() {
 		<-c
 
+		clearScreen()
+		printFinalMessage("Interrupted.")
+
 		os.Exit(1)
 	}()
 
 	processInterviews()
 
 	clearScreen()
-
-	printFinalMessage()
+	printFinalMessage("Finished.")
 
 	if currentStatus.errored > 0 {
 		os.Exit(1)

@@ -28,13 +28,13 @@ func printFirstMessage() {
 	flushLines(lines)
 }
 
-func printFinalMessage() {
+func printFinalMessage(reason string) {
 	lines := []string{}
 
 	addBasicStatusLines(&lines)
 
 	lines = addLine(lines, "")
-	lines = addLine(lines, "Done.")
+	lines = addLine(lines, reason)
 
 	flushLines(lines)
 }
@@ -53,7 +53,7 @@ func printProgress() {
 		s := currentStatus
 		percentDone := s.completed * 100 / config.target
 
-		statusLine := fmt.Sprintf("[%s] %d of %d interviews (%2d%%)", string(spinner[frameIndex]), s.completed, config.target, percentDone)
+		statusLine := fmt.Sprintf("[%s] %d of %d interviews (%d%%)", string(spinner[frameIndex]), s.completed, config.target, percentDone)
 		progressBar := getProgressBar(tm.Width() - len(statusLine) - 1)
 
 		lines = addLine(lines, "%s %s", statusLine, progressBar)
