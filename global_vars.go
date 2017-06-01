@@ -39,4 +39,6 @@ var (
 
 var random = rand.New(rand.NewSource(time.Now().UnixNano()))
 
+var errorChannel = make(chan error)
+
 const endOfInterviewPath = "/Home/Completed"

@@ -9,6 +9,10 @@ import (
 	tm "github.com/buger/goterm"
 )
 
+func printError(err error) {
+	errorChannel <- err
+}
+
 func printFirstMessage() {
 	lines := []string{}
 
@@ -34,7 +38,7 @@ func printFinalMessage(reason string) {
 	addBasicStatusLines(&lines)
 
 	lines = addLine(lines, "")
-	lines = addLine(lines, reason)
+	lines = addLine(lines, "%s Completed %d of %d interviews.", reason, currentStatus.completed, config.target)
 
 	flushLines(lines)
 }
@@ -44,12 +48,21 @@ func addBasicStatusLines(lines *[]string) {
 	*lines = addLine(*lines, "Error      : %4d", currentStatus.errored)
 }
 
-func printProgress() {
+func startOutputLoop() {
 	spinner := `/-\|`
 	frameIndex := 0
 
 	lines := []string{}
 	for currentStatus.completed < config.target {
+		select {
+		case err := <-errorChannel:
+			// some error happened
+			emptyLine := strings.Repeat(" ", tm.Width())
+			tm.Printf("ERROR: %v\n%s\n", err, emptyLine)
+		default:
+			// no errors yet
+		}
+
 		s := currentStatus
 		percentDone := s.completed * 100 / config.target
 

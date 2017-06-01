@@ -40,6 +40,7 @@ func processInterviews() {
 		currentStatus.completed++
 
 		if err != nil {
+			printError(err)
 			currentStatus.errored++
 		}
 	}
