@@ -64,6 +64,8 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 		return nil, "", err
 	}
 
+	printVerbose("response", "Question type: %s, response: %v\n", questionType, result)
+
 	return result, historyOrder, nil
 }
 

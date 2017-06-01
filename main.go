@@ -68,4 +68,11 @@ func ensureConsistentOptions() {
 	if config.maxConcurrency > config.target {
 		config.maxConcurrency = config.target
 	}
+
+	// If stdout is redirected, we want verbose
+	// output because the other output is useless
+	fi, _ := os.Stdout.Stat()
+	if fi != nil {
+		config.verboseOutput = true
+	}
 }

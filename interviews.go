@@ -26,12 +26,16 @@ func processInterviews() {
 
 	for i := 0; i < config.maxConcurrency; i++ {
 		go func(in chan *string, out chan error) {
+			printVerbose("thread", "Starting thread...\n")
+
 			for len(in) > 0 {
 				nextInterview := <-in
 
 				err := performInterview(nextInterview)
 				out <- err
 			}
+
+			printVerbose("thread", "Thread finished.\n")
 		}(chInterviews, chResults)
 	}
 

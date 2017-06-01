@@ -6,11 +6,23 @@ import (
 	"strings"
 	"time"
 
+	"os"
+
 	tm "github.com/buger/goterm"
 )
 
 func printError(err error) {
-	errorChannel <- err
+	if !config.verboseOutput {
+		errorChannel <- err
+	} else {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+	}
+}
+
+func printVerbose(context string, format string, args ...interface{}) {
+	if config.verboseOutput {
+		fmt.Printf("["+context+"] "+format, args...)
+	}
 }
 
 func printFirstMessage() {
@@ -44,8 +56,13 @@ func printFinalMessage(reason string) {
 }
 
 func addBasicStatusLines(lines *[]string) {
-	*lines = addLine(*lines, "Successful : %4d", currentStatus.completed-currentStatus.errored)
-	*lines = addLine(*lines, "Error      : %4d", currentStatus.errored)
+	if !config.verboseOutput {
+		*lines = addLine(*lines, "Successful : %4d", currentStatus.completed-currentStatus.errored)
+		*lines = addLine(*lines, "Error      : %4d", currentStatus.errored)
+	} else {
+		*lines = addLine(*lines, "Successful: %4d, Error: %4d",
+			currentStatus.completed-currentStatus.errored, currentStatus.errored)
+	}
 }
 
 func startOutputLoop() {
@@ -66,20 +83,26 @@ func startOutputLoop() {
 		s := currentStatus
 		percentDone := s.completed * 100 / config.target
 
-		statusLine := fmt.Sprintf("[%s] %d of %d interviews (%d%%)", string(spinner[frameIndex]), s.completed, config.target, percentDone)
-		progressBar := getProgressBar(tm.Width() - len(statusLine) - 1)
+		if !config.verboseOutput {
+			statusLine := fmt.Sprintf("[%s] %d of %d interviews (%d%%)", string(spinner[frameIndex]), s.completed, config.target, percentDone)
+			progressBar := getProgressBar(tm.Width() - len(statusLine) - 1)
 
-		lines = addLine(lines, "%s %s", statusLine, progressBar)
-		lines = addLine(lines, "")
+			lines = addLine(lines, "%s %s", statusLine, progressBar)
+			lines = addLine(lines, "")
+		}
 
 		addBasicStatusLines(&lines)
 
 		flushLines(lines)
-		tm.MoveCursorUp(len(lines) + 1)
-		s.lastLinesWritten = len(lines)
 
-		time.Sleep(250 * time.Millisecond)
-		frameIndex = (frameIndex + 1) % len(spinner)
+		if !config.verboseOutput {
+			tm.MoveCursorUp(len(lines) + 1)
+			s.lastLinesWritten = len(lines)
+			frameIndex = (frameIndex + 1) % len(spinner)
+			time.Sleep(250 * time.Millisecond)
+		} else {
+			time.Sleep(4 * time.Second)
+		}
 
 		lines = lines[:0]
 	}
@@ -100,17 +123,25 @@ func addLine(lines []string, format string, arguments ...interface{}) []string {
 
 func flushLines(lines []string) {
 	for _, line := range lines {
-		tm.Println(line)
+		if !config.verboseOutput {
+			tm.Println(line)
+		} else {
+			fmt.Println(line)
+		}
 	}
 
-	tm.Flush()
+	if !config.verboseOutput {
+		tm.Flush()
+	}
 }
 
 func clearScreen() {
-	lines := []string{}
-	for i := 0; i < currentStatus.lastLinesWritten; i++ {
-		lines = append(lines, strings.Repeat(" ", tm.Width()))
+	if !config.verboseOutput {
+		lines := []string{}
+		for i := 0; i < currentStatus.lastLinesWritten; i++ {
+			lines = append(lines, strings.Repeat(" ", tm.Width()))
+		}
+		flushLines(lines)
+		tm.MoveCursorUp(len(lines) + 1)
 	}
-	flushLines(lines)
-	tm.MoveCursorUp(len(lines) + 1)
 }
