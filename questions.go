@@ -49,8 +49,6 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 
 	questionType := getQuestionType(doc)
 
-	writeVerbose("question-type", fmt.Sprintf("%s\n", questionType))
-
 	switch questionType {
 	case qTypeCategory:
 		err = setCategoryQuestionValues(doc, result)
@@ -65,8 +63,6 @@ func getInterviewResponse(document *string, previousHistoryOrder string) (url.Va
 	if err != nil {
 		return nil, "", err
 	}
-
-	writeVerbose("posting response", fmt.Sprintf("%v\n", result))
 
 	return result, historyOrder, nil
 }

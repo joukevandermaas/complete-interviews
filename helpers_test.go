@@ -12,6 +12,8 @@ import (
 
 	"path/filepath"
 
+	"time"
+
 	"golang.org/x/net/html"
 )
 
@@ -135,13 +137,15 @@ func isLastFile(path string, number *int) bool {
 }
 
 func setupMocking(t *testing.T, path string, numberOfRequests *int) {
-	*verboseOutput = false
-	*maxConcurrency = 1
-	*waitBetweenPosts = 0
-	*htmlOutputDir = ""
+	config = &configuration{
+		verboseOutput:    false,
+		maxConcurrency:   1,
+		waitBetweenPosts: time.Duration(0),
+		requestTimeout:   time.Duration(30) * time.Second,
 
-	*count = 1
-	*interviewURL = path
+		target:       1,
+		interviewURL: path,
+	}
 
 	postContent = func(url *string, body url.Values, ch chan pageContent) {
 		ch <- handleRequest(t, *url, numberOfRequests)
@@ -149,23 +153,5 @@ func setupMocking(t *testing.T, path string, numberOfRequests *int) {
 
 	getContent = func(url *string, ch chan pageContent) {
 		ch <- handleRequest(t, *url, numberOfRequests)
-	}
-
-	writeError = func(err error) {
-		t.Error(err)
-	}
-
-	writeVerbose = func(label string, format string, args ...interface{}) {
-		if *verboseOutput {
-			t.Logf("VERBOSE: "+label+":"+format, args...)
-		}
-	}
-
-	writeOutput = func(format string, args ...interface{}) {
-		t.Logf(format, args...)
-	}
-
-	writeProgress = func(done *int, errors *int, count *int) {
-
 	}
 }

@@ -3,11 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -19,68 +16,32 @@ type pageContent struct {
 	err error
 }
 
-var requestTimeout = time.Duration(30 * time.Second)
-var endOfInterviewPath = "/Home/Completed"
-
-func processInterviews(done *int, errors *int) {
-	if *maxConcurrency < 1 {
-		*maxConcurrency = 1
-	}
-
-	if *maxConcurrency > *count {
-		*maxConcurrency = *count
-	}
-
-	chInterviews := make(chan *string, *count)
+func processInterviews() {
+	chInterviews := make(chan *string, config.target)
 	chResults := make(chan error)
 
-	var waitTimeString string
-	if *waitBetweenPosts > 0 {
-		waitTimeString = fmt.Sprintf(" (waiting %ds between questions)", *waitBetweenPosts)
-	} else {
-		waitTimeString = ""
+	for i := 0; i < config.target; i++ {
+		chInterviews <- &config.interviewURL
 	}
 
-	if *count > 1 {
-		writeOutput("Will complete %d interviews, %d concurrently%s.\n",
-			*count,
-			*maxConcurrency,
-			waitTimeString)
-	} else {
-		writeOutput("Starting interview...\n")
-	}
-	for i := 0; i < *count; i++ {
-		chInterviews <- interviewURL
-	}
-
-	for i := 0; i < *maxConcurrency; i++ {
-		writeVerbose("thread", "Starting thread to process interviews...\n")
-
+	for i := 0; i < config.maxConcurrency; i++ {
 		go func(in chan *string, out chan error) {
 			for len(in) > 0 {
 				nextInterview := <-in
 
-				writeVerbose("picked up interview", "%s\n", *nextInterview)
-
 				err := performInterview(nextInterview)
 				out <- err
 			}
-
-			writeVerbose("thread", "Stopping thread to process interviews...\n")
 		}(chInterviews, chResults)
 	}
 
-	go writeProgress(done, errors, count)
-
-	for *done < *count {
+	for currentStatus.completed < config.target {
 		err := <-chResults
-		(*done)++
-
-		writeVerbose("info", "done: %4d; errors: %4d; queue: %4d\n", *done, *errors, len(chInterviews))
+		currentStatus.completed++
 
 		if err != nil {
-			writeError(err)
-			(*errors)++
+			printError(err)
+			currentStatus.errored++
 		}
 	}
 }
@@ -115,8 +76,6 @@ func performInterview(url *string) error {
 
 		hasAnotherQuestion = !strings.Contains(*result.url, endOfInterviewPath)
 		prevHistoryOrder = historyOrder
-
-		writeVerbose("NEW-QUESTION", "================================\n")
 	}
 
 	return nil
@@ -124,12 +83,12 @@ func performInterview(url *string) error {
 
 /* mockable */
 var postContent = func(url *string, body url.Values, ch chan pageContent) {
-	if *waitBetweenPosts > 0 {
-		time.Sleep(time.Duration(*waitBetweenPosts) * time.Second)
+	if config.waitBetweenPosts > 0 {
+		time.Sleep(config.waitBetweenPosts)
 	}
 
 	client := http.Client{
-		Timeout: requestTimeout,
+		Timeout: config.requestTimeout,
 	}
 
 	response, err := client.Post(*url, "application/x-www-form-urlencoded", strings.NewReader(body.Encode()))
@@ -140,15 +99,13 @@ var postContent = func(url *string, body url.Values, ch chan pageContent) {
 /* mockable */
 var getContent = func(url *string, ch chan pageContent) {
 	client := http.Client{
-		Timeout: requestTimeout,
+		Timeout: config.requestTimeout,
 	}
 
 	response, err := client.Get(*url)
 
 	ch <- handleHTTPResult(response, err)
 }
-
-var httpTime = 1
 
 func handleHTTPResult(response *http.Response, err error) pageContent {
 	if err != nil {
@@ -161,16 +118,6 @@ func handleHTTPResult(response *http.Response, err error) pageContent {
 
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(response.Body)
-
-	if *htmlOutputDir != "" {
-		bytes := buf.Bytes()
-		err = ioutil.WriteFile(filepath.Join(*htmlOutputDir, fmt.Sprintf("page%d.html", httpTime)), bytes, os.ModeAppend)
-
-		if err != nil {
-			return pageContent{err: err}
-		}
-	}
-	httpTime++
 
 	str := buf.String()
 
