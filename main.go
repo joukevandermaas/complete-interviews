@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 
@@ -50,11 +51,26 @@ func main() {
 }
 
 func executeRecordCommand() {
+	recordConfig = &recordConfiguration{
+		interviewURL: *recordInterviewURLArg,
+		outputFile:   *recordOutputFileFlag,
+	}
 
+	file, err := os.Create(recordConfig.outputFile)
+	defer file.Close()
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	startProxyForInterview(file)
+
+	printFinalMessage("Done.")
 }
 
 func executeCompleteCommand() {
-	currentStatus = &status{
+	currentStatus = &completeStatus{
 		completed: 0,
 		errored:   0,
 	}

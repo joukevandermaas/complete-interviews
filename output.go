@@ -26,33 +26,39 @@ func printVerbose(context string, format string, args ...interface{}) {
 }
 
 func printFirstMessage() {
-	lines := []string{}
+	if globalConfig.command == "complete" {
+		lines := []string{}
 
-	var endOfSentence string
-	if completeConfig.target > 1 {
-		endOfSentence = fmt.Sprintf("s, at most %d concurrently.", completeConfig.maxConcurrency)
-	} else {
-		endOfSentence = "."
+		var endOfSentence string
+		if completeConfig.target > 1 {
+			endOfSentence = fmt.Sprintf("s, at most %d concurrently.", completeConfig.maxConcurrency)
+		} else {
+			endOfSentence = "."
+		}
+
+		lines = addLine(lines, "Will complete %d interview%s", completeConfig.target, endOfSentence)
+
+		if completeConfig.waitBetweenPosts > 0 {
+			lines = addLine(lines, "Waiting %s between questions.", completeConfig.waitBetweenPosts.String())
+		}
+
+		flushLines(lines)
 	}
-
-	lines = addLine(lines, "Will complete %d interview%s", completeConfig.target, endOfSentence)
-
-	if completeConfig.waitBetweenPosts > 0 {
-		lines = addLine(lines, "Waiting %s between questions.", completeConfig.waitBetweenPosts.String())
-	}
-
-	flushLines(lines)
 }
 
 func printFinalMessage(reason string) {
-	lines := []string{}
+	if globalConfig.command == "complete" {
+		lines := []string{}
 
-	addBasicStatusLines(&lines)
+		addBasicStatusLines(&lines)
 
-	lines = addLine(lines, "")
-	lines = addLine(lines, "%s Completed %d of %d interviews.", reason, currentStatus.completed, completeConfig.target)
+		lines = addLine(lines, "")
+		lines = addLine(lines, "%s Completed %d of %d interviews.", reason, currentStatus.completed, completeConfig.target)
 
-	flushLines(lines)
+		flushLines(lines)
+	} else {
+		fmt.Println(reason)
+	}
 }
 
 func addBasicStatusLines(lines *[]string) {
@@ -136,7 +142,7 @@ func flushLines(lines []string) {
 }
 
 func clearScreen() {
-	if !globalConfig.verboseOutput {
+	if !globalConfig.verboseOutput && globalConfig.command == "complete" {
 		lines := []string{}
 		for i := 0; i < currentStatus.lastLinesWritten; i++ {
 			lines = append(lines, strings.Repeat(" ", tm.Width()))
