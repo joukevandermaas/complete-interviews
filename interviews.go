@@ -17,14 +17,14 @@ type pageContent struct {
 }
 
 func processInterviews() {
-	chInterviews := make(chan *string, config.target)
+	chInterviews := make(chan *string, completeConfig.target)
 	chResults := make(chan error)
 
-	for i := 0; i < config.target; i++ {
-		chInterviews <- &config.interviewURL
+	for i := 0; i < completeConfig.target; i++ {
+		chInterviews <- &completeConfig.interviewURL
 	}
 
-	for i := 0; i < config.maxConcurrency; i++ {
+	for i := 0; i < completeConfig.maxConcurrency; i++ {
 		go func(in chan *string, out chan error) {
 			printVerbose("thread", "Starting thread...\n")
 
@@ -39,7 +39,7 @@ func processInterviews() {
 		}(chInterviews, chResults)
 	}
 
-	for currentStatus.completed < config.target {
+	for currentStatus.completed < completeConfig.target {
 		err := <-chResults
 		currentStatus.completed++
 
@@ -87,12 +87,12 @@ func performInterview(url *string) error {
 
 /* mockable */
 var postContent = func(url *string, body url.Values, ch chan pageContent) {
-	if config.waitBetweenPosts > 0 {
-		time.Sleep(config.waitBetweenPosts)
+	if completeConfig.waitBetweenPosts > 0 {
+		time.Sleep(completeConfig.waitBetweenPosts)
 	}
 
 	client := http.Client{
-		Timeout: config.requestTimeout,
+		Timeout: globalConfig.requestTimeout,
 	}
 
 	response, err := client.Post(*url, "application/x-www-form-urlencoded", strings.NewReader(body.Encode()))
@@ -103,7 +103,7 @@ var postContent = func(url *string, body url.Values, ch chan pageContent) {
 /* mockable */
 var getContent = func(url *string, ch chan pageContent) {
 	client := http.Client{
-		Timeout: config.requestTimeout,
+		Timeout: globalConfig.requestTimeout,
 	}
 
 	response, err := client.Get(*url)

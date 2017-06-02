@@ -137,14 +137,15 @@ func isLastFile(path string, number *int) bool {
 }
 
 func setupMocking(t *testing.T, path string, numberOfRequests *int) {
-	config = &configuration{
-		verboseOutput:    false,
+	globalConfig = &globalConfiguration{
+		verboseOutput:  false,
+		requestTimeout: time.Duration(30) * time.Second,
+	}
+	completeConfig = &completeConfiguration{
 		maxConcurrency:   1,
 		waitBetweenPosts: time.Duration(0),
-		requestTimeout:   time.Duration(30) * time.Second,
-
-		target:       1,
-		interviewURL: path,
+		target:           1,
+		interviewURL:     path,
 	}
 
 	postContent = func(url *string, body url.Values, ch chan pageContent) {

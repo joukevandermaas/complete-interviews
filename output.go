@@ -12,7 +12,7 @@ import (
 )
 
 func printError(err error) {
-	if !config.verboseOutput {
+	if !globalConfig.verboseOutput {
 		errorChannel <- err
 	} else {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -20,7 +20,7 @@ func printError(err error) {
 }
 
 func printVerbose(context string, format string, args ...interface{}) {
-	if config.verboseOutput {
+	if globalConfig.verboseOutput {
 		fmt.Printf("["+context+"] "+format, args...)
 	}
 }
@@ -29,16 +29,16 @@ func printFirstMessage() {
 	lines := []string{}
 
 	var endOfSentence string
-	if config.target > 1 {
-		endOfSentence = fmt.Sprintf("s, at most %d concurrently.", config.maxConcurrency)
+	if completeConfig.target > 1 {
+		endOfSentence = fmt.Sprintf("s, at most %d concurrently.", completeConfig.maxConcurrency)
 	} else {
 		endOfSentence = "."
 	}
 
-	lines = addLine(lines, "Will complete %d interview%s", config.target, endOfSentence)
+	lines = addLine(lines, "Will complete %d interview%s", completeConfig.target, endOfSentence)
 
-	if config.waitBetweenPosts > 0 {
-		lines = addLine(lines, "Waiting %s between questions.", config.waitBetweenPosts.String())
+	if completeConfig.waitBetweenPosts > 0 {
+		lines = addLine(lines, "Waiting %s between questions.", completeConfig.waitBetweenPosts.String())
 	}
 
 	flushLines(lines)
@@ -50,13 +50,13 @@ func printFinalMessage(reason string) {
 	addBasicStatusLines(&lines)
 
 	lines = addLine(lines, "")
-	lines = addLine(lines, "%s Completed %d of %d interviews.", reason, currentStatus.completed, config.target)
+	lines = addLine(lines, "%s Completed %d of %d interviews.", reason, currentStatus.completed, completeConfig.target)
 
 	flushLines(lines)
 }
 
 func addBasicStatusLines(lines *[]string) {
-	if !config.verboseOutput {
+	if !globalConfig.verboseOutput {
 		*lines = addLine(*lines, "Successful : %4d", currentStatus.completed-currentStatus.errored)
 		*lines = addLine(*lines, "Error      : %4d", currentStatus.errored)
 	} else {
@@ -70,7 +70,7 @@ func startOutputLoop() {
 	frameIndex := 0
 
 	lines := []string{}
-	for currentStatus.completed < config.target {
+	for currentStatus.completed < completeConfig.target {
 		select {
 		case err := <-errorChannel:
 			// some error happened
@@ -81,10 +81,10 @@ func startOutputLoop() {
 		}
 
 		s := currentStatus
-		percentDone := s.completed * 100 / config.target
+		percentDone := s.completed * 100 / completeConfig.target
 
-		if !config.verboseOutput {
-			statusLine := fmt.Sprintf("[%s] %d of %d interviews (%d%%)", string(spinner[frameIndex]), s.completed, config.target, percentDone)
+		if !globalConfig.verboseOutput {
+			statusLine := fmt.Sprintf("[%s] %d of %d interviews (%d%%)", string(spinner[frameIndex]), s.completed, completeConfig.target, percentDone)
 			progressBar := getProgressBar(tm.Width() - len(statusLine) - 1)
 
 			lines = addLine(lines, "%s %s", statusLine, progressBar)
@@ -95,7 +95,7 @@ func startOutputLoop() {
 
 		flushLines(lines)
 
-		if !config.verboseOutput {
+		if !globalConfig.verboseOutput {
 			tm.MoveCursorUp(len(lines) + 1)
 			s.lastLinesWritten = len(lines)
 			frameIndex = (frameIndex + 1) % len(spinner)
@@ -111,7 +111,7 @@ func startOutputLoop() {
 func getProgressBar(size int) string {
 	s := currentStatus
 
-	fraction := float64(s.completed) / float64(config.target)
+	fraction := float64(s.completed) / float64(completeConfig.target)
 	doneBlocks := int(math.Ceil(fraction * float64(size)))
 
 	return strings.Repeat("▓", doneBlocks) + strings.Repeat("░", size-doneBlocks)
@@ -123,20 +123,20 @@ func addLine(lines []string, format string, arguments ...interface{}) []string {
 
 func flushLines(lines []string) {
 	for _, line := range lines {
-		if !config.verboseOutput {
+		if !globalConfig.verboseOutput {
 			tm.Println(line)
 		} else {
 			fmt.Println(line)
 		}
 	}
 
-	if !config.verboseOutput {
+	if !globalConfig.verboseOutput {
 		tm.Flush()
 	}
 }
 
 func clearScreen() {
-	if !config.verboseOutput {
+	if !globalConfig.verboseOutput {
 		lines := []string{}
 		for i := 0; i < currentStatus.lastLinesWritten; i++ {
 			lines = append(lines, strings.Repeat(" ", tm.Width()))
