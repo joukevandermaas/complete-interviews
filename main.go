@@ -51,20 +51,20 @@ func main() {
 }
 
 func executeRecordCommand() {
+	file, err := os.Create(*recordOutputFileFlag)
+	defer file.Close()
+
 	recordConfig = &recordConfiguration{
 		interviewURL: *recordInterviewURLArg,
-		outputFile:   *recordOutputFileFlag,
+		outputFile:   file,
 	}
-
-	file, err := os.Create(recordConfig.outputFile)
-	defer file.Close()
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
-	startProxyForInterview(file)
+	startProxyForInterview()
 
 	printFinalMessage("Done.")
 }
@@ -81,6 +81,15 @@ func executeCompleteCommand() {
 
 		waitBetweenPosts: *completeWaitBetweenPostsFlag,
 		maxConcurrency:   *completeMaxConcurrencyFlag,
+	}
+
+	if *completeReplayFileFlag != "" {
+		file, err := os.Open(*completeReplayFileFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		completeConfig.replayFile = file
 	}
 
 	ensureConsistentCompleteOptions()

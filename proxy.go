@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func startProxyForInterview(outputFile *os.File) {
+func startProxyForInterview() {
 	var completedInterview sync.WaitGroup
 
 	client := http.Client{
@@ -36,7 +36,7 @@ func startProxyForInterview(outputFile *os.File) {
 			form := request.Form
 
 			printVerbose("server", "Body: %v\n", form)
-			writeResponseToFile(outputFile, form)
+			writeResponseToFile(recordConfig.outputFile, form)
 			httpResp, _ := client.PostForm(lastURL, form)
 
 			lastURL = httpResp.Request.URL.String()
@@ -68,17 +68,17 @@ func startProxyForInterview(outputFile *os.File) {
 	openURLInBrowser(url)
 
 	completedInterview.Wait()
-	fmt.Printf("Completed interview. Recording written to \"%s\".\n", recordConfig.outputFile)
+	fmt.Printf("Completed interview. Recording written to \"%s\".\n", recordConfig.outputFile.Name())
 }
 
 func writeResponseToFile(outputFile *os.File, form url.Values) {
-	outputFile.WriteString("---\n")
-
 	for key, value := range form {
 		if key != "screenId" {
 			outputFile.WriteString(fmt.Sprintf("%s=%v\n", key, value))
 		}
 	}
+
+	outputFile.WriteString("---\n")
 }
 
 func getBytesForHTTPResponse(response http.Response) []byte {

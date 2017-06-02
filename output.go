@@ -38,6 +38,10 @@ func printFirstMessage() {
 
 		lines = addLine(lines, "Will complete %d interview%s", completeConfig.target, endOfSentence)
 
+		if completeConfig.replayFile != nil {
+			lines = addLine(lines, "Using replay file \"%s\"", completeConfig.replayFile.Name())
+		}
+
 		if completeConfig.waitBetweenPosts > 0 {
 			lines = addLine(lines, "Waiting %s between questions.", completeConfig.waitBetweenPosts.String())
 		}
@@ -49,6 +53,12 @@ func printFirstMessage() {
 func printFinalMessage(reason string) {
 	if globalConfig.command == "complete" {
 		lines := []string{}
+
+		for len(errorChannel) > 0 {
+			err := <-errorChannel
+			emptyLine := strings.Repeat(" ", tm.Width())
+			tm.Printf("ERROR: %v\n%s\n", err, emptyLine)
+		}
 
 		addBasicStatusLines(&lines)
 

@@ -147,6 +147,12 @@ func setupMocking(t *testing.T, path string, numberOfRequests *int) {
 		target:           1,
 		interviewURL:     path,
 	}
+	currentStatus = &completeStatus{
+		completed:        0,
+		errored:          0,
+		lastLinesWritten: 0,
+		replaySteps:      nil,
+	}
 
 	postContent = func(url *string, body url.Values, ch chan pageContent) {
 		ch <- handleRequest(t, *url, numberOfRequests)
