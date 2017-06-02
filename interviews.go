@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 type pageContent struct {
@@ -90,8 +92,23 @@ func performInterview(url *string) error {
 			prevHistoryOrder = historyOrder
 		}
 	} else {
+		screenID := ""
+		doc, err := html.Parse(strings.NewReader(*result.body))
+
+		walkDocumentByTag(doc, "input", func(input *html.Node) {
+			attrs := attrsToMap(input.Attr)
+
+			if attrs["id"] == "screenId" {
+				screenID = attrs["value"]
+			}
+		})
+		if err != nil {
+			return err
+		}
+
 		for _, answers := range *currentStatus.replaySteps {
-			printVerbose("replay", "posting %v\n", answers)
+			response := addScreenID(answers, screenID)
+			printVerbose("replay", "posting %v\n", response)
 			go postContent(result.url, answers, chInterviews)
 			result = <-chInterviews
 
@@ -105,6 +122,19 @@ func performInterview(url *string) error {
 	}
 
 	return nil
+}
+
+func addScreenID(form url.Values, screenID string) url.Values {
+	result := url.Values{}
+	result.Set("screenId", screenID)
+
+	for key, values := range form {
+		for _, value := range values {
+			result.Add(key, value)
+		}
+	}
+
+	return result
 }
 
 func parseReplayFile(file *os.File) []url.Values {
@@ -124,7 +154,7 @@ func parseReplayFile(file *os.File) []url.Values {
 }
 
 func parseReplayQuestion(question string) url.Values {
-	lines := strings.Fields(question)
+	lines := strings.FieldsFunc(question, func(char rune) bool { return char == '\n' })
 	printVerbose("replay", "question\n")
 	result := url.Values{}
 

@@ -56,8 +56,14 @@ func printFinalMessage(reason string) {
 
 		for len(errorChannel) > 0 {
 			err := <-errorChannel
-			emptyLine := strings.Repeat(" ", tm.Width())
-			tm.Printf("ERROR: %v\n%s\n", err, emptyLine)
+			width := tm.Width()
+			emptyLine := strings.Repeat(" ", width)
+
+			line := fmt.Sprintf("%v", err)
+			if len(line) < tm.Width() {
+				line += strings.Repeat(" ", width-len(line))
+			}
+			tm.Printf("ERROR: %s\n%s\n", line, emptyLine)
 		}
 
 		addBasicStatusLines(&lines)
