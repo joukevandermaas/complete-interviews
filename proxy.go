@@ -14,7 +14,8 @@ import (
 )
 
 func startProxyForInterview() {
-	var completedInterview sync.WaitGroup
+	var interviewWaitGroup sync.WaitGroup
+	var pendingRequestsWaitGroup sync.WaitGroup
 
 	client := http.Client{
 		Timeout: globalConfig.requestTimeout,
@@ -22,11 +23,36 @@ func startProxyForInterview() {
 	lastURL := recordConfig.interviewURL
 
 	handleProxyRequest := func(response http.ResponseWriter, request *http.Request) {
-		printVerbose("server", "New %s request\n", request.Method)
+		if request.URL.Path != "/" {
+			pendingRequestsWaitGroup.Add(1)
+			newURL, _ := url.Parse(lastURL)
+			newURL.Path = request.URL.Path
+
+			printVerbose("server", "static request: %v\n", newURL.Path)
+			httpResp, err := client.Get(newURL.String())
+
+			if err != nil {
+				fmt.Printf("ERROR %v\n", err)
+				return
+			}
+
+			headers := response.Header()
+
+			for key, valList := range httpResp.Header {
+				for _, val := range valList {
+					headers.Add(key, val)
+				}
+			}
+
+			response.Write(getBytesForHTTPResponse(*httpResp))
+			pendingRequestsWaitGroup.Done()
+			return
+		}
+
+		printVerbose("server", "page request: %s\n", request.Method)
+
 		switch request.Method {
 		case "GET":
-			request.ParseForm()
-
 			httpResp, _ := client.Get(lastURL)
 
 			lastURL = httpResp.Request.URL.String()
@@ -45,7 +71,7 @@ func startProxyForInterview() {
 			if strings.Contains(lastURL, endOfInterviewPath) {
 				go func() {
 					time.Sleep(250 * time.Millisecond)
-					completedInterview.Done()
+					interviewWaitGroup.Done()
 				}()
 			}
 		}
@@ -58,7 +84,7 @@ func startProxyForInterview() {
 
 	defer server.Close()
 
-	completedInterview.Add(1)
+	interviewWaitGroup.Add(1)
 	go func() {
 		server.ListenAndServe()
 	}()
@@ -67,8 +93,14 @@ func startProxyForInterview() {
 	fmt.Printf("Serving on %s\n", url)
 	openURLInBrowser(url)
 
-	completedInterview.Wait()
+	interviewWaitGroup.Wait()
+	pendingRequestsWaitGroup.Wait()
+
 	fmt.Printf("Completed interview. Recording written to \"%s\".\n", recordConfig.outputFile.Name())
+}
+
+func handleStaticRequest(response http.ResponseWriter, request *http.Request, baseURL string) {
+
 }
 
 func writeResponseToFile(outputFile *os.File, form url.Values) {
