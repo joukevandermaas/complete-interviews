@@ -52,7 +52,7 @@ type completeConfiguration struct {
 
 type recordConfiguration struct {
 	interviewURL string
-	outputFile   *os.File
+	replayFile   *os.File
 }
 
 var currentStatus *completeStatus

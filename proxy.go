@@ -14,93 +14,122 @@ import (
 )
 
 func startProxyForInterview() {
-	var interviewWaitGroup sync.WaitGroup
-	var pendingRequestsWaitGroup sync.WaitGroup
+	client := http.Client{
+		Timeout: globalConfig.requestTimeout,
+	}
+	resp, err := client.Get(recordConfig.interviewURL)
+
+	if err != nil {
+		printError(err)
+		return
+	}
+
+	baseURL := resp.Request.URL.String()
+
+	handleRequest := func(request *http.Request) {
+		if request.Method == "POST" {
+			request.ParseForm()
+			form := request.Form
+
+			printVerbose("recording", "Recording interview answer %v\n", form)
+			writeResponseToFile(recordConfig.replayFile, form)
+		}
+	}
+
+	isInterviewDone := func(url string) bool {
+		return strings.Contains(url, endOfInterviewPath)
+	}
+
+	runProxy(baseURL, handleRequest, isInterviewDone)
+
+	fmt.Printf("Completed interview. Recording written to \"%s\".\n", recordConfig.replayFile.Name())
+}
+
+func runProxy(baseURL string, handleRequest func(*http.Request), isDone func(string) bool) {
+	var pendingRequestWaitGroup sync.WaitGroup
+	var serverWaitGroup sync.WaitGroup
 
 	client := http.Client{
 		Timeout: globalConfig.requestTimeout,
 	}
-	lastURL := recordConfig.interviewURL
 
-	handleProxyRequest := func(response http.ResponseWriter, request *http.Request) {
+	http.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) {
+		pendingRequestWaitGroup.Add(1)
+		remoteRequestURL := baseURL
+
+		handleRequest(request)
+
+		// For anything not on the root of our server (e.g. scripts/css/images),
+		// we should use the path that was requested. For interview pages, we should
+		// use the base url we've been given
 		if request.URL.Path != "/" {
-			pendingRequestsWaitGroup.Add(1)
-			newURL, _ := url.Parse(lastURL)
+			newURL, _ := url.Parse(baseURL)
 			newURL.Path = request.URL.Path
 
-			printVerbose("server", "static request: %v\n", newURL.Path)
-			httpResp, err := client.Get(newURL.String())
-
-			if err != nil {
-				fmt.Printf("ERROR %v\n", err)
-				return
-			}
-
-			headers := response.Header()
-
-			for key, valList := range httpResp.Header {
-				for _, val := range valList {
-					headers.Add(key, val)
-				}
-			}
-
-			response.Write(getBytesForHTTPResponse(*httpResp))
-			pendingRequestsWaitGroup.Done()
-			return
+			remoteRequestURL = newURL.String()
 		}
 
-		printVerbose("server", "page request: %s\n", request.Method)
+		printVerbose("proxy", "INCOMING %s request on path %s\n", request.Method, request.URL.Path)
+		printVerbose("proxy", "OUTGOING %s request to url %s\n", request.Method, remoteRequestURL)
+
+		var httpResp *http.Response
+		var err error
 
 		switch request.Method {
 		case "GET":
-			httpResp, _ := client.Get(lastURL)
-
-			lastURL = httpResp.Request.URL.String()
-			response.Write(getBytesForHTTPResponse(*httpResp))
+			httpResp, err = client.Get(remoteRequestURL)
 		case "POST":
 			request.ParseForm()
 			form := request.Form
+			httpResp, err = client.PostForm(remoteRequestURL, form)
+		}
 
-			printVerbose("server", "Body: %v\n", form)
-			writeResponseToFile(recordConfig.outputFile, form)
-			httpResp, _ := client.PostForm(lastURL, form)
+		if err != nil {
+			printError(err)
+			return
+		}
 
-			lastURL = httpResp.Request.URL.String()
-			response.Write(getBytesForHTTPResponse(*httpResp))
+		headers := response.Header()
 
-			if strings.Contains(lastURL, endOfInterviewPath) {
-				go func() {
-					time.Sleep(250 * time.Millisecond)
-					interviewWaitGroup.Done()
-				}()
+		for key, valList := range httpResp.Header {
+			for _, val := range valList {
+				headers.Add(key, val)
 			}
 		}
-	}
 
-	http.HandleFunc("/", handleProxyRequest)
+		// we don't want to cache anything!
+		headers.Del("Cache-Control")
+
+		response.Write(getBytesForHTTPResponse(*httpResp))
+		pendingRequestWaitGroup.Done()
+
+		if isDone(httpResp.Request.URL.String()) {
+			go func() {
+				printVerbose("proxy", "Done, killing server now.\n")
+				time.Sleep(250 * time.Millisecond)
+				serverWaitGroup.Done()
+			}()
+		}
+	})
 	server := &http.Server{
 		Addr: ":8080",
 	}
 
 	defer server.Close()
 
-	interviewWaitGroup.Add(1)
+	serverWaitGroup.Add(1)
+
+	url := "http://localhost" + server.Addr
+	fmt.Printf("Serving on %s\n", url)
+
 	go func() {
 		server.ListenAndServe()
 	}()
 
-	url := "http://localhost" + server.Addr
-	fmt.Printf("Serving on %s\n", url)
 	openURLInBrowser(url)
 
-	interviewWaitGroup.Wait()
-	pendingRequestsWaitGroup.Wait()
-
-	fmt.Printf("Completed interview. Recording written to \"%s\".\n", recordConfig.outputFile.Name())
-}
-
-func handleStaticRequest(response http.ResponseWriter, request *http.Request, baseURL string) {
-
+	serverWaitGroup.Wait()
+	pendingRequestWaitGroup.Wait()
 }
 
 func writeResponseToFile(outputFile *os.File, form url.Values) {

@@ -31,23 +31,22 @@ func main() {
 		globalConfig.verboseOutput = true
 	}
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		clearScreen()
+		printFinalMessage("Interrupted.")
+
+		os.Exit(1)
+	}()
+
 	switch command {
 	case "complete":
 		executeCompleteCommand()
 	case "record":
 		executeRecordCommand()
 	}
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-
-		clearScreen()
-		printFinalMessage("Interrupted.")
-
-		os.Exit(1)
-	}()
 }
 
 func executeRecordCommand() {
@@ -56,7 +55,7 @@ func executeRecordCommand() {
 
 	recordConfig = &recordConfiguration{
 		interviewURL: *recordInterviewURLArg,
-		outputFile:   file,
+		replayFile:   file,
 	}
 
 	if err != nil {

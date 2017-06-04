@@ -12,7 +12,7 @@ import (
 )
 
 func printError(err error) {
-	if !globalConfig.verboseOutput {
+	if !globalConfig.verboseOutput && globalConfig.command == "complete" {
 		errorChannel <- err
 	} else {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -21,7 +21,7 @@ func printError(err error) {
 
 func printVerbose(context string, format string, args ...interface{}) {
 	if globalConfig.verboseOutput {
-		fmt.Printf("["+context+"] "+format, args...)
+		fmt.Printf("VERBOSE: ["+context+"] "+format, args...)
 	}
 }
 
@@ -72,8 +72,8 @@ func printFinalMessage(reason string) {
 		lines = addLine(lines, "%s Completed %d of %d interviews.", reason, currentStatus.completed, completeConfig.target)
 
 		flushLines(lines)
-	} else {
-		fmt.Println(reason)
+	} else if globalConfig.command == "record" {
+		fmt.Printf("%s Data file \"%s\" may be corrupt or incomplete.", reason, recordConfig.replayFile.Name())
 	}
 }
 
