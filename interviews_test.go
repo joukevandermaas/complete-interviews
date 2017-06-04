@@ -12,7 +12,7 @@ func TestCompleteInterviews(t *testing.T) {
 
 	assert := assert.New(t)
 
-	err := performInterview(&config.interviewURL)
+	err := performInterview(&completeConfig.interviewURL)
 	assert.NoError(err)
 
 	assert.Equal(13, numberOfRequests)

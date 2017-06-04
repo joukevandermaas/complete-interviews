@@ -3,10 +3,14 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 type pageContent struct {
@@ -17,14 +21,20 @@ type pageContent struct {
 }
 
 func processInterviews() {
-	chInterviews := make(chan *string, config.target)
+	chInterviews := make(chan *string, completeConfig.target)
 	chResults := make(chan error)
 
-	for i := 0; i < config.target; i++ {
-		chInterviews <- &config.interviewURL
+	var replaySteps []url.Values
+	if completeConfig.replayFile != nil {
+		replaySteps = parseReplayFile(completeConfig.replayFile)
+		currentStatus.replaySteps = &replaySteps
 	}
 
-	for i := 0; i < config.maxConcurrency; i++ {
+	for i := 0; i < completeConfig.target; i++ {
+		chInterviews <- &completeConfig.interviewURL
+	}
+
+	for i := 0; i < completeConfig.maxConcurrency; i++ {
 		go func(in chan *string, out chan error) {
 			printVerbose("thread", "Starting thread...\n")
 
@@ -39,7 +49,7 @@ func processInterviews() {
 		}(chInterviews, chResults)
 	}
 
-	for currentStatus.completed < config.target {
+	for currentStatus.completed < completeConfig.target {
 		err := <-chResults
 		currentStatus.completed++
 
@@ -60,39 +70,117 @@ func performInterview(url *string) error {
 		return result.err
 	}
 
-	prevHistoryOrder := ""
-	hasAnotherQuestion := !strings.Contains(*result.url, endOfInterviewPath)
+	if currentStatus.replaySteps == nil {
+		prevHistoryOrder := ""
+		hasAnotherQuestion := !strings.Contains(*result.url, endOfInterviewPath)
+		for hasAnotherQuestion {
+			newRequest, historyOrder, err := getInterviewResponse(result.body, prevHistoryOrder)
 
-	for hasAnotherQuestion {
-		newRequest, historyOrder, err := getInterviewResponse(result.body, prevHistoryOrder)
+			if err != nil {
+				return err
+			}
 
+			go postContent(result.url, newRequest, chInterviews)
+
+			result = <-chInterviews
+
+			if result.err != nil {
+				return result.err
+			}
+
+			hasAnotherQuestion = !strings.Contains(*result.url, endOfInterviewPath)
+			prevHistoryOrder = historyOrder
+		}
+	} else {
+		screenID := ""
+		doc, err := html.Parse(strings.NewReader(*result.body))
+
+		walkDocumentByTag(doc, "input", func(input *html.Node) {
+			attrs := attrsToMap(input.Attr)
+
+			if attrs["id"] == "screenId" {
+				screenID = attrs["value"]
+			}
+		})
 		if err != nil {
 			return err
 		}
 
-		go postContent(result.url, newRequest, chInterviews)
+		for _, answers := range *currentStatus.replaySteps {
+			response := addScreenID(answers, screenID)
+			printVerbose("replay", "posting %v\n", response)
+			go postContent(result.url, answers, chInterviews)
+			result = <-chInterviews
 
-		result = <-chInterviews
-
-		if result.err != nil {
-			return err
+			if result.err != nil {
+				return result.err
+			}
 		}
-
-		hasAnotherQuestion = !strings.Contains(*result.url, endOfInterviewPath)
-		prevHistoryOrder = historyOrder
+		if !strings.Contains(*result.url, endOfInterviewPath) {
+			return fmt.Errorf("end of replay file did not result in completed interview")
+		}
 	}
 
 	return nil
 }
 
+func addScreenID(form url.Values, screenID string) url.Values {
+	result := url.Values{}
+	result.Set("screenId", screenID)
+
+	for key, values := range form {
+		for _, value := range values {
+			result.Add(key, value)
+		}
+	}
+
+	return result
+}
+
+func parseReplayFile(file *os.File) []url.Values {
+	buf := bytes.NewBuffer(nil)
+	io.Copy(buf, file) // Error handling elided for brevity.
+
+	questions := strings.Split(string(buf.Bytes()), "---\n")
+	answers := []url.Values{}
+
+	for _, question := range questions {
+		if strings.TrimSpace(question) != "" {
+			answers = append(answers, parseReplayQuestion(question))
+		}
+	}
+
+	return answers
+}
+
+func parseReplayQuestion(question string) url.Values {
+	lines := strings.FieldsFunc(question, func(char rune) bool { return char == '\n' })
+	printVerbose("replay", "question\n")
+	result := url.Values{}
+
+	for _, line := range lines {
+		splitLine := strings.Split(line, "=")
+		key := splitLine[0]
+		valuesString := splitLine[1]
+
+		values := strings.Trim(valuesString, "[]")
+
+		printVerbose("replay", "key: %s, value: %s\n", key, values)
+
+		result.Set(key, values)
+	}
+
+	return result
+}
+
 /* mockable */
 var postContent = func(url *string, body url.Values, ch chan pageContent) {
-	if config.waitBetweenPosts > 0 {
-		time.Sleep(config.waitBetweenPosts)
+	if completeConfig.waitBetweenPosts > 0 {
+		time.Sleep(completeConfig.waitBetweenPosts)
 	}
 
 	client := http.Client{
-		Timeout: config.requestTimeout,
+		Timeout: globalConfig.requestTimeout,
 	}
 
 	response, err := client.Post(*url, "application/x-www-form-urlencoded", strings.NewReader(body.Encode()))
@@ -103,7 +191,7 @@ var postContent = func(url *string, body url.Values, ch chan pageContent) {
 /* mockable */
 var getContent = func(url *string, ch chan pageContent) {
 	client := http.Client{
-		Timeout: config.requestTimeout,
+		Timeout: globalConfig.requestTimeout,
 	}
 
 	response, err := client.Get(*url)
