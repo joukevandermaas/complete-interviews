@@ -73,7 +73,7 @@ func printFinalMessage(reason string) {
 
 		flushLines(lines)
 	} else if globalConfig.command == "record" {
-		fmt.Printf("%s Data file \"%s\" may be corrupt or incomplete.", reason, recordConfig.replayFile.Name())
+		fmt.Printf("%s\n", reason)
 	}
 }
 
