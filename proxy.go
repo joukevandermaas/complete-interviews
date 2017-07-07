@@ -112,7 +112,7 @@ func runProxy(firstURL string, handleRequest func(*http.Request), isLastRequest 
 		}
 	})
 	server := &http.Server{
-		Addr: ":8080",
+		Addr: ":4222",
 	}
 
 	defer server.Close()
