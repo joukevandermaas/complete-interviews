@@ -36,7 +36,11 @@ func processInterviews() {
 
 	for i := 0; i < completeConfig.maxConcurrency; i++ {
 		if i > 0 {
-			time.Sleep(50 * time.Millisecond)
+			if completeConfig.waitBetweenPosts > 0 {
+				time.Sleep(completeConfig.waitBetweenPosts)
+			} else {
+				time.Sleep(50 * time.Millisecond)
+			}
 		}
 		go func(in chan *string, out chan error) {
 			printVerbose("thread", "Starting thread...\n")

@@ -68,7 +68,7 @@ func printFinalMessage(reason string) {
 
 		addBasicStatusLines(&lines)
 
-		lines = addLine(lines, "")
+		lines = addLine(lines, strings.Repeat(" ", tm.Width()))
 		lines = addLine(lines, "%s Completed %d of %d interviews.", reason, currentStatus.completed, completeConfig.target)
 
 		flushLines(lines)
@@ -110,7 +110,7 @@ func startOutputLoop() {
 			progressBar := getProgressBar(tm.Width() - len(statusLine) - 1)
 
 			lines = addLine(lines, "%s %s", statusLine, progressBar)
-			lines = addLine(lines, "")
+			lines = addLine(lines, strings.Repeat(" ", tm.Width()))
 		}
 
 		addBasicStatusLines(&lines)
