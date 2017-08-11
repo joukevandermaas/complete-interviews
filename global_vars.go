@@ -23,6 +23,7 @@ var (
 
 	recordCommand         = kingpin.Command("record", "Record an interview for later playback")
 	recordOutputFileFlag  = recordCommand.Flag("replay-file", "Output file to write the recording to").Short('r').Default("interview.replay").String()
+	recordTargetArg       = recordCommand.Arg("count", "The number of completes to record.").Required().Int()
 	recordInterviewURLArg = recordCommand.Arg("url", "The url to the interview to complete.").Required().String()
 )
 
@@ -51,6 +52,7 @@ type completeConfiguration struct {
 }
 
 type recordConfiguration struct {
+	target       int
 	interviewURL string
 	replayFile   *os.File
 }

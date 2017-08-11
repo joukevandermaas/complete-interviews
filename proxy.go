@@ -14,6 +14,8 @@ import (
 )
 
 func startProxyForInterview() {
+	requests := recordConfig.target
+
 	handleRequest := func(request *http.Request) {
 		if request.Method == "POST" {
 			request.ParseForm()
@@ -24,16 +26,27 @@ func startProxyForInterview() {
 		}
 	}
 
-	isInterviewDone := func(url string) bool {
-		return strings.Contains(url, endOfInterviewPath)
+	redirectAtEndOfInterview := func(response http.ResponseWriter, request *http.Request) {
+		if strings.Contains(request.URL.String(), endOfInterviewPath) && requests > 0 {
+			http.Redirect(response, request, "/", 302)
+			requests--
+		}
 	}
 
-	runProxy(recordConfig.interviewURL, handleRequest, isInterviewDone)
+	isLastRequest := func(url string) bool {
+		return strings.Contains(url, endOfInterviewPath) && requests < 0
+	}
+
+	runProxy(recordConfig.interviewURL, handleRequest, redirectAtEndOfInterview, isLastRequest)
 
 	fmt.Printf("Completed interview. Recording written to \"%s\".\n", recordConfig.replayFile.Name())
 }
 
-func runProxy(firstURL string, handleRequest func(*http.Request), isLastRequest func(string) bool) {
+func runProxy(
+	firstURL string,
+	handleRequest func(*http.Request),
+	redirectIfNeeded func(http.ResponseWriter, *http.Request),
+	shouldCloseServer func(url string) bool) {
 	var pendingRequestWaitGroup sync.WaitGroup
 	var serverWaitGroup sync.WaitGroup
 
@@ -78,6 +91,8 @@ func runProxy(firstURL string, handleRequest func(*http.Request), isLastRequest 
 		switch request.Method {
 		case "GET":
 			httpResp, err = client.Get(remoteRequestURL.String())
+
+			redirectIfNeeded(response, request)
 		case "POST":
 			request.ParseForm()
 			form := request.Form
@@ -104,7 +119,7 @@ func runProxy(firstURL string, handleRequest func(*http.Request), isLastRequest 
 
 		response.Write(getBytesForHTTPResponse(*httpResp))
 
-		if isLastRequest(request.URL.String()) {
+		if shouldCloseServer(request.URL.String()) {
 			go func() {
 				time.Sleep(250 * time.Millisecond)
 				serverWaitGroup.Done()
@@ -128,9 +143,9 @@ func runProxy(firstURL string, handleRequest func(*http.Request), isLastRequest 
 
 	openURLInBrowser(url)
 
-	printVerbose("proxy", "Waiting for interview to finish...")
+	printVerbose("proxy", "Waiting for interview to finish...\n")
 	serverWaitGroup.Wait()
-	printVerbose("proxy", "Waiting for pending requests to finish...")
+	printVerbose("proxy", "Waiting for pending requests to finish...\n")
 	pendingRequestWaitGroup.Wait()
 	printVerbose("proxy", "Done, killing server now.\n")
 }

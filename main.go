@@ -55,6 +55,7 @@ func executeRecordCommand() {
 
 	recordConfig = &recordConfiguration{
 		interviewURL: *recordInterviewURLArg,
+		target:       *recordTargetArg,
 		replayFile:   file,
 	}
 
