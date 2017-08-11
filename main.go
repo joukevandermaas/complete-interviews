@@ -46,6 +46,8 @@ func main() {
 		executeCompleteCommand()
 	case "record":
 		executeRecordCommand()
+	case "replay":
+		executeReplayCommand()
 	}
 }
 
@@ -83,14 +85,41 @@ func executeCompleteCommand() {
 		maxConcurrency:   *completeMaxConcurrencyFlag,
 	}
 
-	if *completeReplayFileFlag != "" {
-		file, err := os.Open(*completeReplayFileFlag)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
-		completeConfig.replayFile = file
+	ensureConsistentCompleteOptions()
+	printFirstMessage()
+
+	go startOutputLoop()
+
+	processInterviews()
+
+	clearScreen()
+	printFinalMessage("Finished.")
+
+	if currentStatus.errored > 0 {
+		os.Exit(1)
 	}
+}
+
+func executeReplayCommand() {
+	currentStatus = &completeStatus{
+		completed: 0,
+		errored:   0,
+	}
+
+	completeConfig = &completeConfiguration{
+		interviewURL: *replayInterviewURLArg,
+		target:       *replayTargetArg,
+
+		waitBetweenPosts: *replayWaitBetweenPostsFlag,
+		maxConcurrency:   *replayMaxConcurrencyFlag,
+	}
+
+	file, err := os.Open(*replayFileArg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+	completeConfig.replayFile = file
 
 	ensureConsistentCompleteOptions()
 	printFirstMessage()

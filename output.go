@@ -12,7 +12,7 @@ import (
 )
 
 func printError(err error) {
-	if !globalConfig.verboseOutput && globalConfig.command == "complete" {
+	if !globalConfig.verboseOutput && isCompletingInterviews() {
 		errorChannel <- err
 	} else {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -26,7 +26,7 @@ func printVerbose(context string, format string, args ...interface{}) {
 }
 
 func printFirstMessage() {
-	if globalConfig.command == "complete" {
+	if isCompletingInterviews() {
 		lines := []string{}
 
 		var endOfSentence string
@@ -51,7 +51,7 @@ func printFirstMessage() {
 }
 
 func printFinalMessage(reason string) {
-	if globalConfig.command == "complete" {
+	if isCompletingInterviews() {
 		lines := []string{}
 
 		for len(errorChannel) > 0 {
@@ -158,7 +158,7 @@ func flushLines(lines []string) {
 }
 
 func clearScreen() {
-	if !globalConfig.verboseOutput && globalConfig.command == "complete" {
+	if !globalConfig.verboseOutput && isCompletingInterviews() {
 		lines := []string{}
 		for i := 0; i < currentStatus.lastLinesWritten; i++ {
 			lines = append(lines, strings.Repeat(" ", tm.Width()))
@@ -166,4 +166,8 @@ func clearScreen() {
 		flushLines(lines)
 		tm.MoveCursorUp(len(lines) + 1)
 	}
+}
+
+func isCompletingInterviews() bool {
+	return globalConfig.command == "complete" || globalConfig.command == "replay"
 }

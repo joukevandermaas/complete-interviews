@@ -17,7 +17,6 @@ var (
 	completeCommand              = kingpin.Command("complete", "Complete interviews based on a link").Default()
 	completeMaxConcurrencyFlag   = completeCommand.Flag("concurrency", "Maximum number of concurrent interviews").Short('c').Default("10").Int()
 	completeWaitBetweenPostsFlag = completeCommand.Flag("wait-time", "Wait time between answering questions").Default("0").Duration()
-	completeReplayFileFlag       = completeCommand.Flag("replay-file", "Replay file to determine responses").Short('r').String()
 	completeTargetArg            = completeCommand.Arg("count", "The number of completes to generate.").Required().Int()
 	completeInterviewURLArg      = completeCommand.Arg("url", "The url to the interview to complete.").Required().String()
 
@@ -25,6 +24,13 @@ var (
 	recordOutputFileFlag  = recordCommand.Flag("replay-file", "Output file to write the recording to").Short('r').Default("interview.replay").String()
 	recordTargetArg       = recordCommand.Arg("count", "The number of completes to record.").Required().Int()
 	recordInterviewURLArg = recordCommand.Arg("url", "The url to the interview to complete.").Required().String()
+
+	replayCommand              = kingpin.Command("replay", "Replay interviews based on a replay file")
+	replayMaxConcurrencyFlag   = replayCommand.Flag("concurrency", "Maximum number of concurrent interviews").Short('c').Default("10").Int()
+	replayWaitBetweenPostsFlag = replayCommand.Flag("wait-time", "Wait time between answering questions").Default("0").Duration()
+	replayTargetArg            = replayCommand.Arg("count", "The number of replays to generate.").Required().Int()
+	replayInterviewURLArg      = replayCommand.Arg("url", "The url to the interview to complete.").Required().String()
+	replayFileArg              = replayCommand.Arg("replay-file", "Replay file to determine responses").Default("interview.replay").String()
 )
 
 /* GLOBAL DATA STRUCTS */

@@ -22,7 +22,7 @@ type pageContent struct {
 
 func processInterviews() {
 	chInterviews := make(chan *string, completeConfig.target)
-	chResults := make(chan error)
+	chResults := make(chan error, completeConfig.target)
 
 	var replaySteps []url.Values
 	if completeConfig.replayFile != nil {
@@ -127,7 +127,7 @@ func performInterview(url *string) error {
 		for _, answers := range *currentStatus.replaySteps {
 			if strings.Contains(*result.url, endOfInterviewPath) {
 				// start new interview; replay contained multiple
-				printVerbose("replay", "STARTING NEW INTERVIEW!!!!\n")
+				printVerbose("replay", "Starting new interview, because replay file is longer.\n")
 				go getContent(url, chInterviews)
 				result = <-chInterviews
 
