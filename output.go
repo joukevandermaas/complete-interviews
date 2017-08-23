@@ -29,6 +29,12 @@ func printFirstMessage() {
 	if isCompletingInterviews() {
 		lines := []string{}
 
+		whatAreWeDoing := "interview"
+
+		if globalConfig.command == "replay" {
+			whatAreWeDoing = "replay playthrough"
+		}
+
 		var endOfSentence string
 		if completeConfig.target > 1 {
 			endOfSentence = fmt.Sprintf("s, at most %d concurrently.", completeConfig.maxConcurrency)
@@ -36,9 +42,9 @@ func printFirstMessage() {
 			endOfSentence = "."
 		}
 
-		lines = addLine(lines, "Will complete %d interview%s", completeConfig.target, endOfSentence)
+		lines = addLine(lines, "Will complete %d %s%s", completeConfig.target, whatAreWeDoing, endOfSentence)
 
-		if completeConfig.replayFile != nil {
+		if globalConfig.command == "replay" {
 			lines = addLine(lines, "Using replay file \"%s\"", completeConfig.replayFile.Name())
 		}
 
@@ -68,8 +74,14 @@ func printFinalMessage(reason string) {
 
 		addBasicStatusLines(&lines)
 
+		whatAreWeDoing := "interviews"
+
+		if globalConfig.command == "replay" {
+			whatAreWeDoing = "replay playthroughs"
+		}
+
 		lines = addLine(lines, strings.Repeat(" ", tm.Width()))
-		lines = addLine(lines, "%s Completed %d of %d interviews.", reason, currentStatus.completed, completeConfig.target)
+		lines = addLine(lines, "%s Completed %d of %d %s.", reason, currentStatus.completed, completeConfig.target, whatAreWeDoing)
 
 		flushLines(lines)
 	} else if globalConfig.command == "record" {
@@ -106,7 +118,18 @@ func startOutputLoop() {
 		percentDone := s.completed * 100 / completeConfig.target
 
 		if !globalConfig.verboseOutput {
-			statusLine := fmt.Sprintf("[%s] %d of %d interviews (%d%%)", string(spinner[frameIndex]), s.completed, completeConfig.target, percentDone)
+			whatAreWeDoing := "interviews"
+
+			if globalConfig.command == "replay" {
+				whatAreWeDoing = "replay playthroughs"
+			}
+
+			statusLine := fmt.Sprintf("[%s] %d of %d %s (%d%%)",
+				string(spinner[frameIndex]),
+				s.completed,
+				completeConfig.target,
+				whatAreWeDoing,
+				percentDone)
 			progressBar := getProgressBar(tm.Width() - len(statusLine) - 1)
 
 			lines = addLine(lines, "%s %s", statusLine, progressBar)

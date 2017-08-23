@@ -48,7 +48,15 @@ func processInterviews() {
 			for len(in) > 0 {
 				nextInterview := <-in
 
-				err := performInterview(nextInterview)
+				var err error
+				if globalConfig.command == "complete" {
+					err = performInterview(nextInterview)
+				} else if globalConfig.command == "replay" {
+					err = performReplay(nextInterview)
+				} else {
+					err = fmt.Errorf("WTF are you doing")
+				}
+
 				out <- err
 			}
 
@@ -67,6 +75,76 @@ func processInterviews() {
 	}
 }
 
+func performReplay(url *string) error {
+	chInterviews := make(chan pageContent)
+
+	go getContent(url, chInterviews)
+	result := <-chInterviews
+
+	if result.err != nil {
+		return result.err
+	}
+
+	findScreenID := func(content pageContent) (string, error) {
+		foundScreenID := ""
+		doc, err := html.Parse(strings.NewReader(*content.body))
+
+		if err != nil {
+			return foundScreenID, err
+		}
+
+		walkDocumentByTag(doc, "input", func(input *html.Node) {
+			attrs := attrsToMap(input.Attr)
+
+			if attrs["id"] == "screenId" {
+				foundScreenID = attrs["value"]
+			}
+		})
+
+		return foundScreenID, nil
+	}
+
+	screenID, err := findScreenID(result)
+
+	if err != nil {
+		return err
+	}
+
+	for _, answers := range *currentStatus.replaySteps {
+		if strings.Contains(*result.url, endOfInterviewPath) {
+			// start new interview; replay contained multiple
+			printVerbose("replay", "Starting new interview, because replay file is longer.\n")
+			go getContent(url, chInterviews)
+			result = <-chInterviews
+
+			if result.err != nil {
+				return result.err
+			}
+
+			screenID, err = findScreenID(result)
+
+			if err != nil {
+				return err
+			}
+		}
+
+		response := addScreenID(answers, screenID)
+		printVerbose("replay", "posting %v\n", response)
+		go postContent(result.url, answers, chInterviews)
+		result = <-chInterviews
+
+		if result.err != nil {
+			return result.err
+		}
+	}
+
+	if !strings.Contains(*result.url, endOfInterviewPath) {
+		return fmt.Errorf("end of replay file did not result in completed interview")
+	}
+
+	return nil
+}
+
 func performInterview(url *string) error {
 	chInterviews := make(chan pageContent)
 
@@ -77,84 +155,25 @@ func performInterview(url *string) error {
 		return result.err
 	}
 
-	if currentStatus.replaySteps == nil {
-		prevHistoryOrder := ""
-		hasAnotherQuestion := !strings.Contains(*result.url, endOfInterviewPath)
-		for hasAnotherQuestion {
-			newRequest, historyOrder, err := getInterviewResponse(result.body, prevHistoryOrder)
-
-			if err != nil {
-				return err
-			}
-
-			go postContent(result.url, newRequest, chInterviews)
-
-			result = <-chInterviews
-
-			if result.err != nil {
-				return result.err
-			}
-
-			hasAnotherQuestion = !strings.Contains(*result.url, endOfInterviewPath)
-			prevHistoryOrder = historyOrder
-		}
-	} else {
-		findScreenID := func(content pageContent) (string, error) {
-			foundScreenID := ""
-			doc, err := html.Parse(strings.NewReader(*content.body))
-
-			if err != nil {
-				return foundScreenID, err
-			}
-
-			walkDocumentByTag(doc, "input", func(input *html.Node) {
-				attrs := attrsToMap(input.Attr)
-
-				if attrs["id"] == "screenId" {
-					foundScreenID = attrs["value"]
-				}
-			})
-
-			return foundScreenID, nil
-		}
-
-		screenID, err := findScreenID(result)
+	prevHistoryOrder := ""
+	hasAnotherQuestion := !strings.Contains(*result.url, endOfInterviewPath)
+	for hasAnotherQuestion {
+		newRequest, historyOrder, err := getInterviewResponse(result.body, prevHistoryOrder)
 
 		if err != nil {
 			return err
 		}
 
-		for _, answers := range *currentStatus.replaySteps {
-			if strings.Contains(*result.url, endOfInterviewPath) {
-				// start new interview; replay contained multiple
-				printVerbose("replay", "Starting new interview, because replay file is longer.\n")
-				go getContent(url, chInterviews)
-				result = <-chInterviews
+		go postContent(result.url, newRequest, chInterviews)
 
-				if result.err != nil {
-					return result.err
-				}
+		result = <-chInterviews
 
-				screenID, err = findScreenID(result)
-
-				if err != nil {
-					return err
-				}
-			}
-
-			response := addScreenID(answers, screenID)
-			printVerbose("replay", "posting %v\n", response)
-			go postContent(result.url, answers, chInterviews)
-			result = <-chInterviews
-
-			if result.err != nil {
-				return result.err
-			}
+		if result.err != nil {
+			return result.err
 		}
 
-		if !strings.Contains(*result.url, endOfInterviewPath) {
-			return fmt.Errorf("end of replay file did not result in completed interview")
-		}
+		hasAnotherQuestion = !strings.Contains(*result.url, endOfInterviewPath)
+		prevHistoryOrder = historyOrder
 	}
 
 	return nil
