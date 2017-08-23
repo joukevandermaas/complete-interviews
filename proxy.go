@@ -14,7 +14,8 @@ import (
 )
 
 func startProxyForInterview() {
-	requests := recordConfig.target
+	requests := 0
+	isDone := false
 
 	handleRequest := func(request *http.Request) {
 		if request.Method == "POST" {
@@ -27,19 +28,29 @@ func startProxyForInterview() {
 	}
 
 	redirectAtEndOfInterview := func(response http.ResponseWriter, request *http.Request) {
-		if strings.Contains(request.URL.String(), endOfInterviewPath) && requests > 0 {
-			http.Redirect(response, request, "/", 302)
-			requests--
+		if strings.Contains(request.URL.String(), endOfInterviewPath) {
+			if requests < (recordConfig.target - 1) {
+				requests++
+				fmt.Printf("Completed interview %d of %d\n", requests, recordConfig.target)
+				http.Redirect(response, request, "/", 302)
+			} else {
+				isDone = true
+			}
 		}
 	}
 
 	isLastRequest := func(url string) bool {
-		return strings.Contains(url, endOfInterviewPath) && requests < 0
+		willStop := strings.Contains(url, endOfInterviewPath) && isDone
+
+		if willStop {
+			printVerbose("recording", "Last interview is done, stopping server now.\n")
+		}
+		return willStop
 	}
 
 	runProxy(recordConfig.interviewURL, handleRequest, redirectAtEndOfInterview, isLastRequest)
 
-	fmt.Printf("Completed interview. Recording written to \"%s\".\n", recordConfig.replayFile.Name())
+	fmt.Printf("All interview(s) are completed. Recording written to \"%s\".\n", recordConfig.replayFile.Name())
 }
 
 func runProxy(
@@ -121,7 +132,7 @@ func runProxy(
 
 		if shouldCloseServer(request.URL.String()) {
 			go func() {
-				time.Sleep(250 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				serverWaitGroup.Done()
 			}()
 		}
