@@ -81,8 +81,9 @@ func executeCompleteCommand() {
 		interviewURL: *completeInterviewURLArg,
 		target:       *completeTargetArg,
 
-		waitBetweenPosts: *completeWaitBetweenPostsFlag,
-		maxConcurrency:   *completeMaxConcurrencyFlag,
+		waitBetweenPosts:    *completeWaitBetweenPostsFlag,
+		maxConcurrency:      *completeMaxConcurrencyFlag,
+		respondentKeyFormat: getGolangFormat(*completeRespondentKeyFormatFlag),
 	}
 
 	ensureConsistentCompleteOptions()
@@ -110,8 +111,9 @@ func executeReplayCommand() {
 		interviewURL: *replayInterviewURLArg,
 		target:       *replayTargetArg,
 
-		waitBetweenPosts: *replayWaitBetweenPostsFlag,
-		maxConcurrency:   *replayMaxConcurrencyFlag,
+		waitBetweenPosts:    *replayWaitBetweenPostsFlag,
+		maxConcurrency:      *replayMaxConcurrencyFlag,
+		respondentKeyFormat: "",
 	}
 
 	file, err := os.Open(*replayFileArg)
@@ -146,4 +148,38 @@ func ensureConsistentCompleteOptions() {
 	if completeConfig.maxConcurrency > completeConfig.target {
 		completeConfig.maxConcurrency = completeConfig.target
 	}
+}
+
+func getGolangFormat(cmdLineFormat string) string {
+	resultFormat := ""
+	previousCharacter := '\x00'
+	percentCount := 0
+	numberFormat := "%%0%dd"
+
+	for _, character := range cmdLineFormat {
+		if character == '%' {
+			if percentCount == 0 || previousCharacter == '%' {
+				percentCount++
+			} else {
+				kingpin.FatalUsage("Invalid format string '%s'. Percentage signs must not be separated by anything.", cmdLineFormat)
+			}
+		} else {
+			if previousCharacter == '%' {
+				resultFormat += fmt.Sprintf(numberFormat, percentCount)
+			}
+			resultFormat += string(character)
+		}
+
+		previousCharacter = character
+	}
+
+	if previousCharacter == '%' {
+		resultFormat += fmt.Sprintf(numberFormat, percentCount)
+	}
+
+	if percentCount == 0 {
+		kingpin.FatalUsage("Invalid format string '%s'. Must have at least one percentage sign.", cmdLineFormat)
+	}
+
+	return resultFormat
 }

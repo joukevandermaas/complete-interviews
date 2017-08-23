@@ -20,8 +20,13 @@ type pageContent struct {
 	err error
 }
 
+type interviewToComplete struct {
+	url    *string
+	number int
+}
+
 func processInterviews() {
-	chInterviews := make(chan *string, completeConfig.target)
+	chInterviews := make(chan interviewToComplete, completeConfig.target)
 	chResults := make(chan error, completeConfig.target)
 
 	var replaySteps []url.Values
@@ -31,7 +36,7 @@ func processInterviews() {
 	}
 
 	for i := 0; i < completeConfig.target; i++ {
-		chInterviews <- &completeConfig.interviewURL
+		chInterviews <- interviewToComplete{url: &completeConfig.interviewURL, number: i}
 	}
 
 	for i := 0; i < completeConfig.maxConcurrency; i++ {
@@ -42,7 +47,7 @@ func processInterviews() {
 				time.Sleep(50 * time.Millisecond)
 			}
 		}
-		go func(in chan *string, out chan error) {
+		go func(in chan interviewToComplete, out chan error) {
 			printVerbose("thread", "Starting thread...\n")
 
 			for len(in) > 0 {
@@ -50,9 +55,9 @@ func processInterviews() {
 
 				var err error
 				if globalConfig.command == "complete" {
-					err = performInterview(nextInterview)
+					err = performInterview(nextInterview.url, nextInterview.number)
 				} else if globalConfig.command == "replay" {
-					err = performReplay(nextInterview)
+					err = performReplay(nextInterview.url)
 				} else {
 					err = fmt.Errorf("WTF are you doing")
 				}
@@ -145,10 +150,18 @@ func performReplay(url *string) error {
 	return nil
 }
 
-func performInterview(url *string) error {
+func performInterview(url *string, number int) error {
 	chInterviews := make(chan pageContent)
 
-	go getContent(url, chInterviews)
+	startURL := *url
+	if completeConfig.respondentKeyFormat != "" {
+		if !strings.HasSuffix(startURL, "/") {
+			startURL += "/"
+		}
+		startURL += fmt.Sprintf(completeConfig.respondentKeyFormat, number)
+	}
+
+	go getContent(&startURL, chInterviews)
 	result := <-chInterviews
 
 	if result.err != nil {
