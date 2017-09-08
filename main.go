@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 
+	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -26,8 +27,7 @@ func main() {
 
 	// If stdout is redirected, we want verbose
 	// output because the other output is useless
-	fi, _ := os.Stdout.Stat()
-	if fi != nil {
+	if !terminal.IsTerminal(int(os.Stdout.Fd())) {
 		globalConfig.verboseOutput = true
 	}
 
@@ -177,7 +177,7 @@ func getGolangFormat(cmdLineFormat string) string {
 		resultFormat += fmt.Sprintf(numberFormat, percentCount)
 	}
 
-	if percentCount == 0 {
+	if percentCount == 0 && cmdLineFormat != "" {
 		kingpin.FatalUsage("Invalid format string '%s'. Must have at least one percentage sign.", cmdLineFormat)
 	}
 
