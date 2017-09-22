@@ -66,8 +66,9 @@ func printFinalMessage(reason string) {
 			emptyLine := strings.Repeat(" ", width)
 
 			line := fmt.Sprintf("%v", err)
-			if len(line) < tm.Width() {
-				line += strings.Repeat(" ", width-len(line))
+			length := len([]rune(line))
+			if length < width {
+				line += strings.Repeat(" ", width-length)
 			}
 			tm.Printf("ERROR: %s\n%s\n", line, emptyLine)
 		}
@@ -93,6 +94,10 @@ func addBasicStatusLines(lines *[]string) {
 	if !globalConfig.verboseOutput {
 		*lines = addLine(*lines, "Successful : %4d", currentStatus.completed-currentStatus.errored)
 		*lines = addLine(*lines, "Error      : %4d", currentStatus.errored)
+
+		if currentStatus.active > 0 {
+			*lines = addLine(*lines, "Active     : %4d", currentStatus.active)
+		}
 	} else {
 		*lines = addLine(*lines, "Successful: %4d, Error: %4d",
 			currentStatus.completed-currentStatus.errored, currentStatus.errored)
@@ -100,7 +105,7 @@ func addBasicStatusLines(lines *[]string) {
 }
 
 func startOutputLoop() {
-	spinner := `/-\|`
+	spinner := []rune(`⠁⠁⠉⠙⠚⠒⠂⠂⠒⠲⠴⠤⠄⠄⠤⠠⠠⠤⠦⠖⠒⠐⠐⠒⠓⠋⠉⠈⠈`)
 	frameIndex := 0
 
 	lines := []string{}
@@ -124,15 +129,16 @@ func startOutputLoop() {
 				whatAreWeDoing = "replay playthroughs"
 			}
 
-			statusLine := fmt.Sprintf("[%s] %d of %d %s (%d%%)",
-				string(spinner[frameIndex]),
+			statusLine := fmt.Sprintf("%d of %d %s (%d%%)",
 				s.completed,
 				completeConfig.target,
 				whatAreWeDoing,
 				percentDone)
-			progressBar := getProgressBar(tm.Width() - len(statusLine) - 1)
+			progressBar := getProgressBar(tm.Width() - 1)
 
-			lines = addLine(lines, "%s %s", statusLine, progressBar)
+			lines = addLine(lines, "[%s] %s", string(spinner[frameIndex]), statusLine)
+			lines = addLine(lines, "")
+			lines = addLine(lines, progressBar)
 			lines = addLine(lines, strings.Repeat(" ", tm.Width()))
 		}
 
@@ -144,7 +150,7 @@ func startOutputLoop() {
 			tm.MoveCursorUp(len(lines) + 1)
 			s.lastLinesWritten = len(lines)
 			frameIndex = (frameIndex + 1) % len(spinner)
-			time.Sleep(250 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		} else {
 			time.Sleep(4 * time.Second)
 		}
@@ -163,7 +169,15 @@ func getProgressBar(size int) string {
 }
 
 func addLine(lines []string, format string, arguments ...interface{}) []string {
-	return append(lines, fmt.Sprintf(format, arguments...))
+	line := fmt.Sprintf(format, arguments...)
+
+	length := len([]rune(line))
+
+	if length < tm.Width() {
+		line += strings.Repeat(" ", tm.Width()-length)
+	}
+
+	return append(lines, line)
 }
 
 func flushLines(lines []string) {

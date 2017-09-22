@@ -29,45 +29,55 @@ func processInterviews() {
 	chInterviews := make(chan interviewToComplete, completeConfig.target)
 	chResults := make(chan error, completeConfig.target)
 
-	var replaySteps []url.Values
-	if completeConfig.replayFile != nil {
-		replaySteps = parseReplayFile(completeConfig.replayFile)
-		currentStatus.replaySteps = &replaySteps
-	}
-
-	for i := 0; i < completeConfig.target; i++ {
-		chInterviews <- interviewToComplete{url: &completeConfig.interviewURL, number: i}
-	}
-
-	for i := 0; i < completeConfig.maxConcurrency; i++ {
-		if i > 0 {
-			if completeConfig.waitBetweenPosts > 0 {
-				time.Sleep(completeConfig.waitBetweenPosts)
-			} else {
-				time.Sleep(50 * time.Millisecond)
-			}
+	go func() {
+		var replaySteps []url.Values
+		if completeConfig.replayFile != nil {
+			replaySteps = parseReplayFile(completeConfig.replayFile)
+			currentStatus.replaySteps = &replaySteps
 		}
-		go func(in chan interviewToComplete, out chan error) {
-			printVerbose("thread", "Starting thread...\n")
 
-			for len(in) > 0 {
-				nextInterview := <-in
+		for i := 0; i < completeConfig.target; i++ {
+			chInterviews <- interviewToComplete{url: &completeConfig.interviewURL, number: i}
+		}
 
-				var err error
-				if globalConfig.command == "complete" {
-					err = performInterview(nextInterview.url, nextInterview.number)
-				} else if globalConfig.command == "replay" {
-					err = performReplay(nextInterview.url)
+		for i := 0; i < completeConfig.maxConcurrency; i++ {
+			if i > 0 {
+				if completeConfig.waitBetweenPosts > 0 {
+					time.Sleep(completeConfig.waitBetweenPosts)
 				} else {
-					err = fmt.Errorf("WTF are you doing")
+					time.Sleep(50 * time.Millisecond)
+				}
+			}
+			go func(in chan interviewToComplete, out chan error) {
+				printVerbose("thread", "Starting thread...\n")
+
+				for len(in) > 0 {
+					nextInterview := <-in
+
+					var err error
+					if globalConfig.command == "complete" {
+						err = performInterview(nextInterview.url, nextInterview.number)
+					} else if globalConfig.command == "replay" {
+						err = performReplay(nextInterview.url)
+					} else {
+						err = fmt.Errorf("WTF are you doing")
+					}
+
+					out <- err
 				}
 
-				out <- err
-			}
+				printVerbose("thread", "Thread finished.\n")
+			}(chInterviews, chResults)
+		}
+	}()
 
-			printVerbose("thread", "Thread finished.\n")
-		}(chInterviews, chResults)
-	}
+	go func() {
+		for currentStatus.completed < completeConfig.target {
+			time.Sleep(500 * time.Millisecond)
+
+			currentStatus.active = completeConfig.target - len(chInterviews) - currentStatus.completed
+		}
+	}()
 
 	for currentStatus.completed < completeConfig.target {
 		err := <-chResults
@@ -78,6 +88,8 @@ func processInterviews() {
 			currentStatus.errored++
 		}
 	}
+
+	currentStatus.active = 0
 }
 
 func performReplay(url *string) error {

@@ -38,6 +38,7 @@ var (
 type completeStatus struct {
 	completed int
 	errored   int
+	active    int
 
 	lastLinesWritten int
 	replaySteps      *[]url.Values
