@@ -338,7 +338,7 @@ func attrsToMap(attrs []html.Attribute) map[string]string {
 }
 
 func parseInt(value string) (int, error) {
-	result, err := strconv.ParseInt(value, 0, 32)
+	result, err := strconv.ParseInt(value, 0, 64)
 
 	if err != nil {
 		return 0, err

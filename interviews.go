@@ -60,7 +60,7 @@ func processInterviews() {
 					} else if globalConfig.command == "replay" {
 						err = performReplay(nextInterview.url)
 					} else {
-						err = fmt.Errorf("WTF are you doing")
+						err = fmt.Errorf("Unknown command")
 					}
 
 					out <- err
