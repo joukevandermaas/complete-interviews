@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"strings"
@@ -49,14 +50,20 @@ func processInterviews() {
 			go func(in chan interviewToComplete, out chan error) {
 				printVerbose("thread", "Starting thread...\n")
 
+				cookieJar, _ := cookiejar.New(nil)
+				client := http.Client{
+					Timeout: globalConfig.requestTimeout,
+					Jar:     cookieJar,
+				}
+
 				for len(in) > 0 {
 					nextInterview := <-in
 
 					var err error
 					if globalConfig.command == "complete" {
-						err = performInterview(nextInterview.url, nextInterview.number)
+						err = performInterview(client, nextInterview.url, nextInterview.number)
 					} else if globalConfig.command == "replay" {
-						err = performReplay(nextInterview.url)
+						err = performReplay(client, nextInterview.url)
 					} else {
 						err = fmt.Errorf("Unknown command")
 					}
@@ -90,8 +97,8 @@ func processInterviews() {
 	currentStatus.active = 0
 }
 
-func performReplay(url *string) error {
-	result, err := getContent(url)
+func performReplay(client http.Client, url *string) error {
+	result, err := getContent(client, url)
 
 	if err != nil {
 		return err
@@ -126,7 +133,7 @@ func performReplay(url *string) error {
 		if strings.Contains(*result.url, endOfInterviewPath) {
 			// start new interview; replay contained multiple
 			printVerbose("replay", "Starting new interview, because replay file is longer.\n")
-			result, err := getContent(url)
+			result, err := getContent(client, url)
 
 			if err != nil {
 				return err
@@ -141,7 +148,7 @@ func performReplay(url *string) error {
 
 		response := addScreenID(answers, screenID)
 		printVerbose("replay", "posting %v\n", response)
-		result, err = postContent(result.url, answers)
+		result, err = postContent(client, result.url, answers)
 
 		if err != nil {
 			return err
@@ -155,7 +162,7 @@ func performReplay(url *string) error {
 	return nil
 }
 
-func performInterview(url *string, number int) error {
+func performInterview(client http.Client, url *string, number int) error {
 	startURL := *url
 	if completeConfig.respondentKeyFormat != "" {
 		if !strings.HasSuffix(startURL, "/") {
@@ -164,7 +171,7 @@ func performInterview(url *string, number int) error {
 		startURL += fmt.Sprintf(completeConfig.respondentKeyFormat, number)
 	}
 
-	result, err := getContent(&startURL)
+	result, err := getContent(client, &startURL)
 
 	if err != nil {
 		return err
@@ -179,7 +186,7 @@ func performInterview(url *string, number int) error {
 			return err
 		}
 
-		result, err = postContent(result.url, newRequest)
+		result, err = postContent(client, result.url, newRequest)
 
 		if err != nil {
 			return err
@@ -242,13 +249,9 @@ func parseReplayQuestion(question string) url.Values {
 }
 
 /* mockable */
-var postContent = func(url *string, body url.Values) (pageContent, error) {
+var postContent = func(client http.Client, url *string, body url.Values) (pageContent, error) {
 	if completeConfig.waitBetweenPosts > 0 {
 		time.Sleep(completeConfig.waitBetweenPosts)
-	}
-
-	client := http.Client{
-		Timeout: globalConfig.requestTimeout,
 	}
 
 	printVerbose("post", "content: %s\n", body)
@@ -263,11 +266,7 @@ var postContent = func(url *string, body url.Values) (pageContent, error) {
 }
 
 /* mockable */
-var getContent = func(url *string) (pageContent, error) {
-	client := http.Client{
-		Timeout: globalConfig.requestTimeout,
-	}
-
+var getContent = func(client http.Client, url *string) (pageContent, error) {
 	response, err := client.Get(*url)
 
 	if err != nil {
