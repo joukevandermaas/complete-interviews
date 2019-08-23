@@ -127,6 +127,9 @@ func setCommonValues(document *html.Node, result url.Values) error {
 		if attrs["id"] == "historyOrder" {
 			result.Set("historyOrder", attrs["value"])
 		}
+		if attrs["name"] == "__RequestVerificationToken" {
+			result.Set("__RequestVerificationToken", attrs["value"])
+		}
 	})
 
 	return nil

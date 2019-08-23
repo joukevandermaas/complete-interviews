@@ -16,8 +16,6 @@ import (
 type pageContent struct {
 	body *string
 	url  *string
-
-	err error
 }
 
 type interviewToComplete struct {
@@ -93,13 +91,10 @@ func processInterviews() {
 }
 
 func performReplay(url *string) error {
-	chInterviews := make(chan pageContent)
+	result, err := getContent(url)
 
-	go getContent(url, chInterviews)
-	result := <-chInterviews
-
-	if result.err != nil {
-		return result.err
+	if err != nil {
+		return err
 	}
 
 	findScreenID := func(content pageContent) (string, error) {
@@ -131,11 +126,10 @@ func performReplay(url *string) error {
 		if strings.Contains(*result.url, endOfInterviewPath) {
 			// start new interview; replay contained multiple
 			printVerbose("replay", "Starting new interview, because replay file is longer.\n")
-			go getContent(url, chInterviews)
-			result = <-chInterviews
+			result, err := getContent(url)
 
-			if result.err != nil {
-				return result.err
+			if err != nil {
+				return err
 			}
 
 			screenID, err = findScreenID(result)
@@ -147,11 +141,10 @@ func performReplay(url *string) error {
 
 		response := addScreenID(answers, screenID)
 		printVerbose("replay", "posting %v\n", response)
-		go postContent(result.url, answers, chInterviews)
-		result = <-chInterviews
+		result, err = postContent(result.url, answers)
 
-		if result.err != nil {
-			return result.err
+		if err != nil {
+			return err
 		}
 	}
 
@@ -163,8 +156,6 @@ func performReplay(url *string) error {
 }
 
 func performInterview(url *string, number int) error {
-	chInterviews := make(chan pageContent)
-
 	startURL := *url
 	if completeConfig.respondentKeyFormat != "" {
 		if !strings.HasSuffix(startURL, "/") {
@@ -173,11 +164,10 @@ func performInterview(url *string, number int) error {
 		startURL += fmt.Sprintf(completeConfig.respondentKeyFormat, number)
 	}
 
-	go getContent(&startURL, chInterviews)
-	result := <-chInterviews
+	result, err := getContent(&startURL)
 
-	if result.err != nil {
-		return result.err
+	if err != nil {
+		return err
 	}
 
 	prevHistoryOrder := ""
@@ -189,12 +179,10 @@ func performInterview(url *string, number int) error {
 			return err
 		}
 
-		go postContent(result.url, newRequest, chInterviews)
+		result, err = postContent(result.url, newRequest)
 
-		result = <-chInterviews
-
-		if result.err != nil {
-			return result.err
+		if err != nil {
+			return err
 		}
 
 		hasAnotherQuestion = !strings.Contains(*result.url, endOfInterviewPath)
@@ -254,7 +242,7 @@ func parseReplayQuestion(question string) url.Values {
 }
 
 /* mockable */
-var postContent = func(url *string, body url.Values, ch chan pageContent) {
+var postContent = func(url *string, body url.Values) (pageContent, error) {
 	if completeConfig.waitBetweenPosts > 0 {
 		time.Sleep(completeConfig.waitBetweenPosts)
 	}
@@ -263,27 +251,34 @@ var postContent = func(url *string, body url.Values, ch chan pageContent) {
 		Timeout: globalConfig.requestTimeout,
 	}
 
+	printVerbose("post", "content: %s\n", body)
 	response, err := client.Post(*url, "application/x-www-form-urlencoded", strings.NewReader(body.Encode()))
 
-	ch <- handleHTTPResult(response, err)
+	if err != nil {
+		return pageContent{}, err
+	}
+
+	result, err := handleHTTPResult(response)
+	return result, err
 }
 
 /* mockable */
-var getContent = func(url *string, ch chan pageContent) {
+var getContent = func(url *string) (pageContent, error) {
 	client := http.Client{
 		Timeout: globalConfig.requestTimeout,
 	}
 
 	response, err := client.Get(*url)
 
-	ch <- handleHTTPResult(response, err)
-}
-
-func handleHTTPResult(response *http.Response, err error) pageContent {
 	if err != nil {
-		return pageContent{err: err}
+		return pageContent{}, err
 	}
 
+	result, err := handleHTTPResult(response)
+	return result, err
+}
+
+func handleHTTPResult(response *http.Response) (pageContent, error) {
 	defer response.Body.Close()
 
 	url := response.Request.URL.String()
@@ -296,8 +291,8 @@ func handleHTTPResult(response *http.Response, err error) pageContent {
 	result := pageContent{body: &str, url: &url}
 
 	if response.StatusCode >= 400 {
-		result.err = fmt.Errorf("http request was unsuccessful: %s (url: %s)", response.Status, url)
+		return pageContent{}, fmt.Errorf("http request was unsuccessful: %s (url: %s)", response.Status, url)
 	}
 
-	return result
+	return result, nil
 }
